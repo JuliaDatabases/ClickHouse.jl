@@ -1,5 +1,6 @@
 using Test
 using ClickHouse
+import ClickHouse: VarUInt
 using Sockets
 
 @test begin
