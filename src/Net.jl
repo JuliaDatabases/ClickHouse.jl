@@ -1,3 +1,5 @@
+import Base: UInt64, convert
+
 # ============================================================================ #
 # [Context structs]                                                            #
 # ============================================================================ #
@@ -169,6 +171,8 @@ const COL_TY_MAP = Dict(
     "DateTime" => UInt8,
     "String" => String,
 )
+
+const COL_TY_REV_MAP = Dict(v => k for (k, v) ∈ COL_TY_MAP)
 
 function read_col(ctx::ReadCtx, num_rows::VarUInt)::Column
     name = chread(ctx, String)

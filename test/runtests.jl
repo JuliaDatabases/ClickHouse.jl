@@ -17,7 +17,7 @@ end
     read(ctx.io, 3) == [0x94, 0x91, 0x06]
 end
 
-@testset "Decode & re-encode client packets" begin
+@testset "Decode & re-encode client packets `SELECT 1;`" begin
     # This .bin file was extracted from a tcpdump captured from a session
     # with the official ClickHouse command line client.
     data = read(open("select1-client-query.bin"), 100_000, all = true)
@@ -57,7 +57,7 @@ end
     @test reencoded_data == data
 end
 
-@testset "Decode server packets" begin
+@testset "Decode server packets `SELECT 1;`" begin
     io = open("select1-server-query-resp.bin")
 
     packet = ClickHouse.read_server_packet(io)
@@ -85,6 +85,15 @@ end
     @test typeof(packet) == ClickHouse.ServerEndOfStream
 
     @test eof(io)
+end
+
+@testset "Decode server packets `INSERT INTO woof VALUES (1);`" begin
+    io = open("insert1-client.bin")
+
+    while !eof(io)
+        packet = ClickHouse.read_client_packet(io)
+        @show packet
+    end
 end
 
 # @testset "SELECT 1; on localhost DB" begin
