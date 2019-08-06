@@ -17,7 +17,7 @@ end
     read(ctx.io, 3) == [0x94, 0x91, 0x06]
 end
 
-@testset "Decode & re-encode client packets `SELECT 1;`" begin
+@testset "Decode & re-encode client packets (SELECT 1)" begin
     # This .bin file was extracted from a tcpdump captured from a session
     # with the official ClickHouse command line client.
     data = read(open("select1/client-query.bin"), 100_000, all = true)
@@ -57,7 +57,7 @@ end
     @test reencoded_data == data
 end
 
-@testset "Decode server packets `SELECT 1;`" begin
+@testset "Decode server packets (SELECT 1)" begin
     io = open("select1/server-query-resp.bin")
 
     packet = ClickHouse.read_server_packet(io)
@@ -87,7 +87,7 @@ end
     @test eof(io)
 end
 
-@testset "Decode client packets `INSERT INTO woof VALUES (1);`" begin
+@testset "Decode client packets (INSERT INTO woof VALUES (1))" begin
     io = open("insert1/client.bin")
 
     while !eof(io)
@@ -96,6 +96,42 @@ end
     end
 
     @test true
+end
+
+@testset "Decode server packets (OHLC data)" begin
+    io = open("insert-ohlc/server.bin")
+
+    while !eof(io)
+        packet = ClickHouse.read_server_packet(io)
+        # @show packet
+    end
+end
+
+@testset "Decode & re-encode client packets (OHLC data)" begin
+    data = read(open("select1/client-query.bin"), 100_000, all = true)
+    io = IOBuffer(data)
+
+    # Read packets.
+
+    packets = []
+    while !eof(io)
+        packet = ClickHouse.read_client_packet(io)
+        push!(packets, packet)
+    end
+
+    @test eof(io)
+
+    # Re-encode them.
+
+    io = IOBuffer(UInt8[], write = true, read = true, maxsize = 100_000)
+    for packet ∈ packets
+        ClickHouse.write_packet(io, packet)
+    end
+
+    seek(io, 0)
+    reencoded_data = read(io, 100_000)
+
+    @test reencoded_data == data
 end
 
 # @testset "SELECT 1; on localhost DB" begin
