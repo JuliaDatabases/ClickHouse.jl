@@ -15,28 +15,6 @@ struct WriteCtx
 end
 
 # ============================================================================ #
-# [ch{read,write} impls for primitive types]                                   #
-# ============================================================================ #
-
-chread(ctx::ReadCtx, ::Type{T}) where T <: Number = read(ctx.io, T)
-chread(ctx::ReadCtx, ::Type{Bool})::Bool = read(ctx.io, Bool)
-chread(ctx::ReadCtx, x::UInt64)::Array{UInt8, 1} = read(ctx.io, x)
-
-function chread(ctx::ReadCtx, ::Type{String})::String
-    len = chread(ctx, VarUInt) |> UInt64
-    chread(ctx, len) |> String
-end
-
-chwrite(ctx::WriteCtx, x::Number) = write(ctx.io, x)
-chwrite(ctx::WriteCtx, x::Bool) = write(ctx.io, x)
-chwrite(ctx::WriteCtx, x::Array{UInt8, 1}) = write(ctx.io, x)
-
-function chwrite(ctx::WriteCtx, x::String)
-    chwrite(ctx, x |> length |> VarUInt)
-    chwrite(ctx, x |> Array{UInt8})
-end
-
-# ============================================================================ #
 # [Variable length integer]                                                    #
 # ============================================================================ #
 
@@ -73,6 +51,53 @@ function chread(ctx::ReadCtx, ::Type{VarUInt})::VarUInt
         i += 1
     end
 end
+
+# ============================================================================ #
+# [chread impls for primitive types]                                           #
+# ============================================================================ #
+
+# Scalar reads
+chread(ctx::ReadCtx, ::Type{T}) where T <: Number = read(ctx.io, T)
+chread(ctx::ReadCtx, x::UInt64)::Vector{UInt8} = read(ctx.io, x)
+
+function chread(ctx::ReadCtx, ::Type{String})::String
+    len = chread(ctx, VarUInt) |> UInt64
+    chread(ctx, len) |> String
+end
+
+# Vector reads
+function chread(
+    ctx::ReadCtx,
+    ::Type{Vector{T}},
+    count::VarUInt,
+)::Vector{T} where T <: Number
+    data = zeros(T, UInt64(count))
+    read!(ctx.io, data)
+    data
+end
+
+chread(
+    ctx::ReadCtx,
+    ::Type{Vector{String}},
+    count::VarUInt,
+)::Vector{String} = [chread(ctx, String) for _ ∈ 1:UInt64(count)]
+
+# ============================================================================ #
+# [chwrite impls for primitive types]                                          #
+# ============================================================================ #
+
+# Scalar writes
+chwrite(ctx::WriteCtx, x::Number) = write(ctx.io, x)
+chwrite(ctx::WriteCtx, x::Vector{T}) where T <: Number = write(ctx.io, x)
+
+function chwrite(ctx::WriteCtx, x::String)
+    chwrite(ctx, x |> length |> VarUInt)
+    chwrite(ctx, x |> Array{UInt8})
+end
+
+# Vector writes
+chwrite(ctx::ReadCtx, x::Vector{T}) where T <: Number = write(ctx.io, x)
+chwrite(ctx::ReadCtx, x::Vector{String}) = foreach(x -> chwrite(ctx, x), x)
 
 # ============================================================================ #
 # [Parse helpers]                                                              #
@@ -147,15 +172,7 @@ struct Column
     data::Any
 end
 
-struct Block
-    temp_table::String
-    block_info::BlockInfo
-    num_columns::VarUInt
-    num_rows::VarUInt
-    columns::Array{Column}
-end
-
-const COL_TY_MAP = Dict(
+const COL_TYPE_MAP = Dict(
     # Unsigned
     "UInt8" => UInt8,
     "UInt16" => UInt16,
@@ -168,26 +185,33 @@ const COL_TY_MAP = Dict(
     "Int32" => Int32,
     "Int64" => Int64,
 
-    "DateTime" => UInt8,
+    # Floats
+    "Float32" => Float32,
+    "Float64" => Float64,
+
     "String" => String,
+    "DateTime" => UInt32,
+    "Date" => UInt16,
 )
 
-const COL_TY_REV_MAP = Dict(v => k for (k, v) ∈ COL_TY_MAP)
-
+# We can't just use chread here because we need the size to be passed
+# in from the `Block` decoder that holds the row count.
 function read_col(ctx::ReadCtx, num_rows::VarUInt)::Column
     name = chread(ctx, String)
-    type = chread(ctx, String)
-    ty = COL_TY_MAP[type]
-    data = [chread(ctx, ty) for _ ∈ 1:UInt64(num_rows)]
-    Column(name, type, data)
+    type_name = chread(ctx, String)
+    type = COL_TYPE_MAP[type_name]
+    data = chread(ctx, Vector{type}, num_rows)
+    Column(name, type_name, data)
 end
 
-function chwrite(ctx::WriteCtx, x::Column)
-    chwrite(ctx, x.name)
-    chwrite(ctx, x.type)
-    for x ∈ x.data
-        chwrite(ctx, x)
-    end
+impl_chwrite_for_ty(Column)
+
+struct Block
+    temp_table::String
+    block_info::BlockInfo
+    num_columns::VarUInt
+    num_rows::VarUInt
+    columns::Array{Column}
 end
 
 function chread(ctx::ReadCtx, ::Type{Block})::Block
@@ -382,8 +406,21 @@ function read_packet(io::IO, opcode_map::Dict{UInt64, DataType})::Any
     chread(ctx, ty)
 end
 
-read_server_packet(io::IO)::Any = read_packet(io, SERVER_OPCODE_TY_MAP)
 read_client_packet(io::IO)::Any = read_packet(io, CLIENT_OPCODE_TY_MAP)
+
+struct ClickHouseServerException <: Exception
+    exc::ServerException
+end
+
+function read_server_packet(io::IO)::Any
+    packet = read_packet(io, SERVER_OPCODE_TY_MAP)
+
+    if typeof(packet) == ServerException
+        throw(ClickHouseServerException(packet))
+    end
+
+    packet
+end
 
 # ============================================================================ #
 # [Message encoding]                                                           #

@@ -20,7 +20,7 @@ end
 @testset "Decode & re-encode client packets `SELECT 1;`" begin
     # This .bin file was extracted from a tcpdump captured from a session
     # with the official ClickHouse command line client.
-    data = read(open("select1-client-query.bin"), 100_000, all = true)
+    data = read(open("select1/client-query.bin"), 100_000, all = true)
     io = IOBuffer(data)
     packets = []
 
@@ -58,7 +58,7 @@ end
 end
 
 @testset "Decode server packets `SELECT 1;`" begin
-    io = open("select1-server-query-resp.bin")
+    io = open("select1/server-query-resp.bin")
 
     packet = ClickHouse.read_server_packet(io)
     @test typeof(packet) == ClickHouse.ServerInfo
@@ -87,13 +87,15 @@ end
     @test eof(io)
 end
 
-@testset "Decode server packets `INSERT INTO woof VALUES (1);`" begin
-    io = open("insert1-client.bin")
+@testset "Decode client packets `INSERT INTO woof VALUES (1);`" begin
+    io = open("insert1/client.bin")
 
     while !eof(io)
         packet = ClickHouse.read_client_packet(io)
-        @show packet
+        # @show packet
     end
+
+    @test true
 end
 
 # @testset "SELECT 1; on localhost DB" begin

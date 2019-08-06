@@ -1,3 +1,4 @@
+using DataFrames
 using Sockets
 
 # ============================================================================ #
@@ -23,6 +24,7 @@ end
 function write_query(sock::ClickHouseSock, query::AbstractString)::Nothing
     query = ClientQuery("", sock.client_info, "", 2, 0, query)
     write_packet(sock.io, query)
+    write_packet(sock.io, make_block(Column[]))
     nothing
 end
 
@@ -33,8 +35,8 @@ function make_block(columns::Array{Column})::Block
     Block("", BlockInfo(), num_columns, num_rows, columns)
 end
 
-function columns2dict(cols::Array{Column})::Dict{String, Any}
-    Dict(x.name => x.data for x ∈ cols)
+function columns2dict(cols::Array{Column})::Dict{Symbol, Any}
+    Dict(Symbol(x.name) => x.data for x ∈ cols)
 end
 
 # ============================================================================ #
@@ -100,12 +102,10 @@ end
 function insert(
     sock::ClickHouseSock,
     table::AbstractString,
-    columns::Dict{String, Array{Any, 1}} = Dict(),
-)::Nothing
+    columns::Dict{String, Vector{T}} = Dict(),
+)::Nothing where T
     # TODO: We might want to escape the table name here...
     write_query(sock, "INSERT INTO $(table) VALUES")
-
-    write_packet(sock.io, make_block(Column[]))
 
     if length(columns) > 0 && length(first(columns)) > 0
         write_packet(sock.io, make_block([
@@ -129,43 +129,70 @@ function insert(
     nothing
 end
 
-"Execute a query, streaming the resulting blocks into a channel."
-function select_into_channel(
+"Execute a query, streaming the resulting blocks through a channel."
+function select_channel(
     sock::ClickHouseSock,
     query::AbstractString,
-    ch::Channel{Dict{String, Array{Any}}},
-)::Nothing
-    write_query(sock, query)
-    write_packet(sock.io, make_block(Column[]))
+)::Channel{Dict{Symbol, Any}}
+    Channel(ctype = Dict{Symbol, Any}) do ch
+        write_query(sock, query)
 
-    start_block = read_server_packet(sock.io)
-    start_block::Block
-    @assert UInt64(start_block.num_rows) == 0
+        start_block = read_server_packet(sock.io)
+        start_block::Block
+        @assert UInt64(start_block.num_rows) == 0
 
-    while true
-        packet = read_server_packet(sock.io)
+        while true
+            packet = read_server_packet(sock.io)
 
-        handle(x::ServerProfileInfo) = true
-        handle(x::ServerProgress) = true
+            handle(x::ServerProfileInfo) = true
+            handle(x::ServerProgress) = true
+            function handle(block::Block)
+                if UInt64(block.num_rows) != 0
+                    put!(ch, columns2dict(block.columns))
+                    true
+                else
+                    false
+                end
+            end
 
-        function handle(block::Block)
-            if UInt64(block.num_rows) != 0
-                put!(ch, columns2dict(block.columns))
-                true
-            else
-                false
+            if !handle(packet)
+                break
             end
         end
 
-        if !handle(packet)
-            break
+        end_of_stream = read_server_packet(sock.io)
+        end_of_stream::ServerEndOfStream
+    end
+end
+
+"Execute a query, flattening blocks into a single dict of column arrays."
+function select(
+    sock::ClickHouseSock,
+    query::AbstractString,
+)::Dict{Symbol, Any}
+    result = Dict{Symbol, Any}()
+    ch = select_channel(sock, query)
+    for row ∈ ch, (col_name, col_data) ∈ row
+        arr = get(result, col_name, nothing)
+        if arr === nothing
+            result[col_name] = col_data
+        else
+            append!(arr, col_data)
         end
     end
+    result
+end
 
-    end_of_stream = read_server_packet(sock.io)
-    end_of_stream::ServerEndOfStream
-
-    nothing
+"Execute a query, flattening blocks into a dataframe."
+function select_df(
+    sock::ClickHouseSock,
+    query::AbstractString
+)::DataFrame
+    columns = pairs(select(sock, query))
+    DataFrame(
+        [x for (_, x) ∈ columns],
+        [x for (x, _) ∈ columns],
+    )
 end
 
 # ============================================================================ #
