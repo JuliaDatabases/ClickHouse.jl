@@ -61,7 +61,7 @@ function connect(
             "0.0.0.0:0",
             0x01,
             "",
-            "6b88a142c2bc",
+            "",
             CLIENT_NAME,
             DBMS_VER_MAJOR,
             DBMS_VER_MINOR,
@@ -83,8 +83,7 @@ function connect(
     ))
 
     # Read server info.
-    server_info = read_server_packet(sock.io)
-    server_info::ServerInfo
+    server_info = read_server_packet(sock.io)::ServerInfo
     sock.tz = server_info.server_timezone
 
     sock
@@ -93,38 +92,49 @@ end
 "Send a ping request and wait for the response."
 function ping(sock::ClickHouseSock)::Nothing
     write_packet(sock.io, ClientPing())
-    pong = read_server_packet(sock.io)
-    pong::ServerPong
+    read_server_packet(sock.io)::ServerPong
     nothing
 end
 
-"Insert a single block into a table."
+"Execute a DDL query."
+function execute(
+    sock::ClickHouseSock,
+    ddl_query::AbstractString,
+)::Nothing
+    write_query(sock, ddl_query)
+    read_server_packet(sock.io)::ServerEndOfStream
+    nothing
+end
+
+"""
+Insert blocks into a table, reading from an iterable.
+The iterable is expected to yield values of type `Dict{Symbol, Any}`.
+"""
 function insert(
     sock::ClickHouseSock,
     table::AbstractString,
-    columns::Dict{Symbol, Vector{T}} = Dict(),
+    iter,
 )::Nothing where T
     # TODO: We might want to escape the table name here...
     write_query(sock, "INSERT INTO $(table) VALUES")
 
-    if length(columns) > 0 && length(first(columns)) > 0
-        write_packet(sock.io, make_block([
+    for block_dict ∈ iter
+        block = make_block([
             Column(
                 string(name),
                 COL_TYPE_REV_MAP[typeof(first(column))],
                 column,
             )
-            for (name, column) ∈ columns
-        ]))
+            for (name, column) ∈ block_dict
+        ])
+        write_packet(sock.io, block)
     end
 
+    # Empty block = end of data.
     write_packet(sock.io, make_block(Column[]))
 
-    resp = read_server_packet(sock.io)
-    resp::Block
-
-    resp = read_server_packet(sock.io)
-    resp::ServerEndOfStream
+    read_server_packet(sock.io)::Block
+    read_server_packet(sock.io)::ServerEndOfStream
 
     nothing
 end
@@ -146,22 +156,19 @@ function select_channel(
 
             handle(x::ServerProfileInfo) = true
             handle(x::ServerProgress) = true
+            handle(x::ServerEndOfStream) = false
+
             function handle(block::Block)
                 if UInt64(block.num_rows) != 0
                     put!(ch, columns2dict(block.columns))
-                    true
-                else
-                    false
                 end
+                true
             end
 
             if !handle(packet)
                 break
             end
         end
-
-        end_of_stream = read_server_packet(sock.io)
-        end_of_stream::ServerEndOfStream
     end
 end
 

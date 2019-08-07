@@ -1,18 +1,17 @@
 using Test
 using ClickHouse
-import ClickHouse: VarUInt
-using Sockets
+using DataFrames
 
 @test begin
     io = IOBuffer([0xC2, 0x0A])
     ctx = ClickHouse.ReadCtx(io, false)
-    ClickHouse.chread(ctx, VarUInt) == VarUInt(0x542)
+    ClickHouse.chread(ctx, ClickHouse.VarUInt) == ClickHouse.VarUInt(0x542)
 end
 
 @test begin
     io = IOBuffer(UInt8[], read=true, write=true, maxsize=10)
     ctx = ClickHouse.WriteCtx(io, false)
-    ClickHouse.chwrite(ctx, VarUInt(100_500))
+    ClickHouse.chwrite(ctx, ClickHouse.VarUInt(100_500))
     seek(ctx.io, 0)
     read(ctx.io, 3) == [0x94, 0x91, 0x06]
 end
@@ -146,54 +145,52 @@ end
     @test reencoded_data == data
 end
 
-# @testset "SELECT 1; on localhost DB" begin
-#     sock = connect("localhost", 9000)
-#     hello = ClickHouse.ClientHello("Julia", 1, 1, 54423, "", "default", "")
-#     ClickHouse.write_packet(sock, hello)
+@testset "Queries on localhost DB" begin
+    table = "ClickHouseJL_Test"
+    sock = connect("localhost", 9000)
 
-#     server_info = ClickHouse.read_server_packet(sock)
-#     @test typeof(server_info) == ClickHouse.ServerInfo
-#     @test server_info.server_name == "ClickHouse"
+    try
+        execute(sock, """
+            CREATE TABLE $(table)
+                (lul UInt64, oof Float32, foo String)
+            ENGINE = Memory
+        """)
+    catch exc
+        exc::ClickHouseServerException
+        occursin(r"Table .* already exists", exc.exc.message) || rethrow()
+    end
 
-#     ping = ClickHouse.ClientPing()
-#     ClickHouse.write_packet(sock, ping)
+    data = Dict(
+        :lul => UInt64[42, 1337, 123],
+        :oof => Float32[0., ℯ, π],
+        :foo => String["aa", "bb", "cc"],
+    )
 
-#     pong = ClickHouse.read_server_packet(sock)
-#     @test typeof(pong) == ClickHouse.ServerPong
+    # Single block inserts.
+    for _ ∈ 1:3
+        insert(sock, table, [data])
+    end
 
-#     query = ClickHouse.ClientQuery(
-#         "",
-#         ClickHouse.ClientInfo(
-#             0x01,
-#             "",
-#             "",
-#             "0.0.0.0:0",
-#             0x01,
-#             "",
-#             "6b88a142c2bc",
-#             "ClickHouse client",
-#             19,
-#             11,
-#             54423,
-#             "",
-#             2
-#         ),
-#         "",
-#         2,
-#         0,
-#         "SELECT 1",
-#     )
-#     ClickHouse.write_packet(sock, query)
+    # Multi block insert.
+    insert(sock, table, repeat([data], 100))
 
-#     block = ClickHouse.Block("", ClickHouse.BlockInfo(), 0, 0, [])
-#     ClickHouse.write_packet(sock, block)
+    # SELECT -> Dict
+    proj = ClickHouse.select(sock, "SELECT * FROM $(table) LIMIT 4")
+    @test proj[:lul] == UInt64[42, 1337, 123, 42]
+    @test proj[:oof] == Float32[0., ℯ, π, 0.]
+    @test proj[:foo] == String["aa", "bb", "cc", "aa"]
 
-#     packet = ClickHouse.read_server_packet(sock)
-#     @show packet
+    # SELECT -> DF
+    proj_df = select_df(sock, "SELECT * FROM $(table) LIMIT 3, 3")
+    exp_df = DataFrame(data)
 
-#     packet = ClickHouse.read_server_packet(sock)
-#     @show packet
+    # Normalize column order.
+    order = [:lul, :oof, :foo]
+    proj_df = proj_df[:, order]
+    exp_df = exp_df[:, order]
 
-#     packet = ClickHouse.read_server_packet(sock)
-#     @show packet
-# end
+    @test proj_df == exp_df
+
+    # Clean up.
+    execute(sock, "DROP TABLE $(table)")
+end

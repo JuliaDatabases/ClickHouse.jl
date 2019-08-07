@@ -88,7 +88,6 @@ chread(
 
 # Scalar writes
 chwrite(ctx::WriteCtx, x::Number) = write(ctx.io, x)
-chwrite(ctx::WriteCtx, x::Vector{T}) where T <: Number = write(ctx.io, x)
 
 function chwrite(ctx::WriteCtx, x::String)
     chwrite(ctx, x |> length |> VarUInt)
@@ -96,8 +95,8 @@ function chwrite(ctx::WriteCtx, x::String)
 end
 
 # Vector writes
-chwrite(ctx::ReadCtx, x::Vector{T}) where T <: Number = write(ctx.io, x)
-chwrite(ctx::ReadCtx, x::Vector{String}) = foreach(x -> chwrite(ctx, x), x)
+chwrite(ctx::WriteCtx, x::Vector{T}) where T <: Number = write(ctx.io, x)
+chwrite(ctx::WriteCtx, x::Vector{String}) = foreach(x -> chwrite(ctx, x), x)
 
 # ============================================================================ #
 # [Parse helpers]                                                              #
