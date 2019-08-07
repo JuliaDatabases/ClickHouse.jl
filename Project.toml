@@ -1,9 +1,0 @@
-name = "ClickHouse"
-uuid = "82f2e89e-b495-11e9-1d9d-fb40d7cf2130"
-authors = ["Joel Höner <athre0z@zyantific.com>"]
-version = "0.1.0"
-
-[deps]
-DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
-Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
-Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
