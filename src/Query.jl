@@ -102,7 +102,7 @@ end
 function insert(
     sock::ClickHouseSock,
     table::AbstractString,
-    columns::Dict{String, Vector{T}} = Dict(),
+    columns::Dict{Symbol, Vector{T}} = Dict(),
 )::Nothing where T
     # TODO: We might want to escape the table name here...
     write_query(sock, "INSERT INTO $(table) VALUES")
@@ -110,8 +110,8 @@ function insert(
     if length(columns) > 0 && length(first(columns)) > 0
         write_packet(sock.io, make_block([
             Column(
-                name,
-                COL_TY_REV_MAP[typeof(first(column))],
+                string(name),
+                COL_TYPE_REV_MAP[typeof(first(column))],
                 column,
             )
             for (name, column) ∈ columns
@@ -137,9 +137,9 @@ function select_channel(
     Channel(ctype = Dict{Symbol, Any}) do ch
         write_query(sock, query)
 
-        start_block = read_server_packet(sock.io)
-        start_block::Block
-        @assert UInt64(start_block.num_rows) == 0
+        sample_block = read_server_packet(sock.io)
+        sample_block::Block
+        @assert UInt64(sample_block.num_rows) == 0
 
         while true
             packet = read_server_packet(sock.io)

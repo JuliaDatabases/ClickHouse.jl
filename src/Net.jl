@@ -71,7 +71,7 @@ function chread(
     ::Type{Vector{T}},
     count::VarUInt,
 )::Vector{T} where T <: Number
-    data = zeros(T, UInt64(count))
+    data = Vector{T}(undef, UInt64(count))
     read!(ctx.io, data)
     data
 end
@@ -194,6 +194,8 @@ const COL_TYPE_MAP = Dict(
     "Date" => UInt16,
 )
 
+const COL_TYPE_REV_MAP = Dict(v => k for (k, v) ∈ COL_TYPE_MAP)
+
 # We can't just use chread here because we need the size to be passed
 # in from the `Block` decoder that holds the row count.
 function read_col(ctx::ReadCtx, num_rows::VarUInt)::Column
@@ -284,13 +286,22 @@ end
 impl_chread_for_ty(ServerProfileInfo)
 
 struct ServerException
-    rows::UInt32
+    code::UInt32
     name::String
     message::String
-    strack_trace::String
+    stack_trace::String
+    nested::Union{Nothing, ServerException}
 end
 
-impl_chread_for_ty(ServerException)
+function chread(ctx::ReadCtx, ::Type{ServerException})::ServerException
+    code = chread(ctx, UInt32)
+    name = chread(ctx, String)
+    message = chread(ctx, String)
+    stack_trace = chread(ctx, String)
+    has_nested = chread(ctx, Bool)
+    nested = has_nested ? chread(ctx, ServerException) : nothing
+    ServerException(code, name, message, stack_trace, nested)
+end
 
 struct ServerEndOfStream
 end

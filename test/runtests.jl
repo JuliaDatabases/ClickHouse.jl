@@ -92,7 +92,6 @@ end
 
     while !eof(io)
         packet = ClickHouse.read_client_packet(io)
-        # @show packet
     end
 
     @test true
@@ -103,12 +102,25 @@ end
 
     while !eof(io)
         packet = ClickHouse.read_server_packet(io)
-        # @show packet
+    end
+end
+
+@testset "Decode server packets (exception)" begin
+    io = open("error/server.bin")
+
+    while !eof(io)
+        try
+            packet = ClickHouse.read_server_packet(io)
+        catch exc
+            if !isa(exc, ClickHouseServerException)
+                rethrow()
+            end
+        end
     end
 end
 
 @testset "Decode & re-encode client packets (OHLC data)" begin
-    data = read(open("select1/client-query.bin"), 100_000, all = true)
+    data = read(open("insert-ohlc/client.bin"), 1_000_000, all = true)
     io = IOBuffer(data)
 
     # Read packets.
@@ -123,13 +135,13 @@ end
 
     # Re-encode them.
 
-    io = IOBuffer(UInt8[], write = true, read = true, maxsize = 100_000)
+    io = IOBuffer(UInt8[], write = true, read = true, maxsize = 1_000_000)
     for packet ∈ packets
         ClickHouse.write_packet(io, packet)
     end
 
     seek(io, 0)
-    reencoded_data = read(io, 100_000)
+    reencoded_data = read(io, 1_000_000)
 
     @test reencoded_data == data
 end

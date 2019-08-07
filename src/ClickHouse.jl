@@ -10,5 +10,6 @@ export select_df
 export insert
 export connect
 export ping
+export ClickHouseServerException
 
 end # module
