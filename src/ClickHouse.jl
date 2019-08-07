@@ -3,6 +3,7 @@ module ClickHouse
 include("Net.jl")
 include("Query.jl")
 
+export ClickHouseSock
 export Block
 export select
 export select_channel

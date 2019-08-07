@@ -37,7 +37,7 @@ insert(con, "MyTable", [Dict(
 
 #### Selecting into a dict of `(column, data)` pairs
 ```julia
-ClickHouse.select(con, "SELECT * FROM MyTable")
+select(con, "SELECT * FROM MyTable")
 ```
 
 ```

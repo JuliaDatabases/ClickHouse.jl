@@ -418,6 +418,7 @@ end
 
 read_client_packet(io::IO)::Any = read_packet(io, CLIENT_OPCODE_TY_MAP)
 
+"ClickHouse server-side exception."
 struct ClickHouseServerException <: Exception
     exc::ServerException
 end
