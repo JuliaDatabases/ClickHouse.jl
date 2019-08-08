@@ -24,19 +24,38 @@ end
 function write_query(sock::ClickHouseSock, query::AbstractString)::Nothing
     query = ClientQuery("", sock.client_info, "", 2, 0, query)
     write_packet(sock.io, query)
-    write_packet(sock.io, make_block(Column[]))
+    write_packet(sock.io, make_block())
     nothing
 end
 
-function make_block(columns::Array{Column})::Block
+function dict2columns(
+    dict::Dict{Symbol, T} where T,
+    valid_columns::Set{Symbol},
+)::Vector{Column}
+    @assert begin
+        diff = symdiff(dict |> keys |> Set, valid_columns)
+        isempty(diff)
+    end "Mismatched columns: $(diff)"
+
+    [
+        Column(
+            string(name),
+            COL_TYPE_REV_MAP[typeof(first(column))],
+            column,
+        )
+        for (name, column) ∈ dict
+    ]
+end
+
+function columns2dict(cols::Vector{Column})::Dict{Symbol, Any}
+    Dict(Symbol(x.name) => x.data for x ∈ cols)
+end
+
+function make_block(columns::Vector{Column} = Column[])::Block
     num_columns = length(columns)
     num_rows = num_columns == 0 ? 0 : length(columns[1].data)
     @assert all(length(col.data) == num_rows for col ∈ columns)
     Block("", BlockInfo(), num_columns, num_rows, columns)
-end
-
-function columns2dict(cols::Array{Column})::Dict{Symbol, Any}
-    Dict(Symbol(x.name) => x.data for x ∈ cols)
 end
 
 # ============================================================================ #
@@ -118,22 +137,18 @@ function insert(
     # TODO: We might want to escape the table name here...
     write_query(sock, "INSERT INTO $(table) VALUES")
 
+    sample_block = read_server_packet(sock.io)::Block
+    valid_columns = Set([Symbol(x.name) for x ∈ sample_block.columns])
+
     for block_dict ∈ iter
-        block = make_block([
-            Column(
-                string(name),
-                COL_TYPE_REV_MAP[typeof(first(column))],
-                column,
-            )
-            for (name, column) ∈ block_dict
-        ])
+        columns = dict2columns(block_dict, valid_columns)
+        block = make_block(columns)
         write_packet(sock.io, block)
     end
 
     # Empty block = end of data.
-    write_packet(sock.io, make_block(Column[]))
+    write_packet(sock.io, make_block())
 
-    read_server_packet(sock.io)::Block
     read_server_packet(sock.io)::ServerEndOfStream
 
     nothing
