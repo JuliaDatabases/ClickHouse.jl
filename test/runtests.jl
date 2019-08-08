@@ -1,115 +1,117 @@
 using Test
 using ClickHouse
+using ClickHouse: read_client_packet, read_server_packet
 using DataFrames
 
 @test begin
-    io = IOBuffer([0xC2, 0x0A])
-    ctx = ClickHouse.ReadCtx(io, false)
-    ClickHouse.chread(ctx, ClickHouse.VarUInt) == ClickHouse.VarUInt(0x542)
+    sock = IOBuffer([0xC2, 0x0A]) |> ClickHouseSock
+    ClickHouse.chread(sock, ClickHouse.VarUInt) == ClickHouse.VarUInt(0x542)
 end
 
 @test begin
-    io = IOBuffer(UInt8[], read=true, write=true, maxsize=10)
-    ctx = ClickHouse.WriteCtx(io, false)
-    ClickHouse.chwrite(ctx, ClickHouse.VarUInt(100_500))
-    seek(ctx.io, 0)
-    read(ctx.io, 3) == [0x94, 0x91, 0x06]
+    sock = IOBuffer(UInt8[], read=true, write=true, maxsize=10) |>
+        ClickHouseSock
+    ClickHouse.chwrite(sock, ClickHouse.VarUInt(100_500))
+    seek(sock.io, 0)
+    read(sock.io, 3) == [0x94, 0x91, 0x06]
 end
 
 @testset "Decode & re-encode client packets (SELECT 1)" begin
     # This .bin file was extracted from a tcpdump captured from a session
     # with the official ClickHouse command line client.
     data = read(open("select1/client-query.bin"), 100_000, all = true)
-    io = IOBuffer(data)
+    sock = data |> IOBuffer |> ClickHouseSock
     packets = []
 
     # Read packets.
 
-    packet = ClickHouse.read_client_packet(io)
+    packet = read_client_packet(sock)
     push!(packets, packet)
     @test typeof(packet) == ClickHouse.ClientHello
 
-    packet = ClickHouse.read_client_packet(io)
+    packet = read_client_packet(sock)
     push!(packets, packet)
     @test typeof(packet) == ClickHouse.ClientPing
 
-    packet = ClickHouse.read_client_packet(io)
+    packet = read_client_packet(sock)
     push!(packets, packet)
     @test typeof(packet) == ClickHouse.ClientQuery
 
-    packet = ClickHouse.read_client_packet(io)
+    packet = read_client_packet(sock)
     push!(packets, packet)
     @test typeof(packet) == ClickHouse.Block
 
-    @test eof(io)
+    @test eof(sock.io)
 
     # Re-encode them.
 
-    io = IOBuffer(UInt8[], write = true, read = true, maxsize = 100_000)
+    sock = IOBuffer(UInt8[], write = true, read = true, maxsize = 100_000) |>
+        ClickHouseSock
+
     for packet ∈ packets
-        ClickHouse.write_packet(io, packet)
+        ClickHouse.write_packet(sock, packet)
     end
 
-    seek(io, 0)
-    reencoded_data = read(io, 100_000)
+    seek(sock.io, 0)
+    reencoded_data = read(sock.io, 100_000)
 
     @test reencoded_data == data
 end
 
 @testset "Decode server packets (SELECT 1)" begin
-    io = open("select1/server-query-resp.bin")
+    sock = open("select1/server-query-resp.bin") |> ClickHouseSock
 
-    packet = ClickHouse.read_server_packet(io)
+    packet = read_server_packet(sock)
     @test typeof(packet) == ClickHouse.ServerInfo
 
-    packet = ClickHouse.read_server_packet(io)
+    packet = read_server_packet(sock)
     @test typeof(packet) == ClickHouse.ServerPong
 
-    packet = ClickHouse.read_server_packet(io)
+    packet = read_server_packet(sock)
     @test typeof(packet) == ClickHouse.Block
 
-    packet = ClickHouse.read_server_packet(io)
+    packet = read_server_packet(sock)
     @test typeof(packet) == ClickHouse.Block
 
-    packet = ClickHouse.read_server_packet(io)
+    packet = read_server_packet(sock)
     @test typeof(packet) == ClickHouse.ServerProfileInfo
 
-    packet = ClickHouse.read_server_packet(io)
+    packet = read_server_packet(sock)
     @test typeof(packet) == ClickHouse.ServerProgress
 
-    packet = ClickHouse.read_server_packet(io)
+    packet = read_server_packet(sock)
     @test typeof(packet) == ClickHouse.Block
 
-    packet = ClickHouse.read_server_packet(io)
+    packet = read_server_packet(sock)
     @test typeof(packet) == ClickHouse.ServerEndOfStream
 
-    @test eof(io)
+    @test eof(sock.io)
 end
 
 @testset "Decode client packets (INSERT INTO woof VALUES (1))" begin
-    io = open("insert1/client.bin")
+    sock = open("insert1/client.bin") |> ClickHouseSock
 
-    while !eof(io)
-        packet = ClickHouse.read_client_packet(io)
+    while !eof(sock.io)
+        packet = read_client_packet(sock)
     end
 
     @test true
 end
 
 @testset "Decode server packets (OHLC data)" begin
-    io = open("insert-ohlc/server.bin")
+    sock = open("insert-ohlc/server.bin") |> ClickHouseSock
 
-    while !eof(io)
-        packet = ClickHouse.read_server_packet(io)
+    while !eof(sock.io)
+        packet = read_server_packet(sock)
     end
 end
 
 @testset "Decode server packets (exception)" begin
-    io = open("error/server.bin")
+    sock = open("error/server.bin") |> ClickHouseSock
 
-    while !eof(io)
+    while !eof(sock.io)
         try
-            packet = ClickHouse.read_server_packet(io)
+            packet = read_server_packet(sock)
         catch exc
             if !isa(exc, ClickHouseServerException)
                 rethrow()
@@ -120,27 +122,28 @@ end
 
 @testset "Decode & re-encode client packets (OHLC data)" begin
     data = read(open("insert-ohlc/client.bin"), 1_000_000, all = true)
-    io = IOBuffer(data)
+    sock = IOBuffer(data) |> ClickHouseSock
 
     # Read packets.
 
     packets = []
-    while !eof(io)
-        packet = ClickHouse.read_client_packet(io)
+    while !eof(sock.io)
+        packet = read_client_packet(sock)
         push!(packets, packet)
     end
 
-    @test eof(io)
+    @test eof(sock.io)
 
     # Re-encode them.
 
-    io = IOBuffer(UInt8[], write = true, read = true, maxsize = 1_000_000)
+    sock = IOBuffer(UInt8[], write = true, read = true, maxsize = 1_000_000) |>
+        ClickHouseSock
     for packet ∈ packets
-        ClickHouse.write_packet(io, packet)
+        ClickHouse.write_packet(sock, packet)
     end
 
-    seek(io, 0)
-    reencoded_data = read(io, 1_000_000)
+    seek(sock.io, 0)
+    reencoded_data = read(sock.io, 1_000_000)
 
     @test reencoded_data == data
 end

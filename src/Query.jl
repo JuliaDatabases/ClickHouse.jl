@@ -2,29 +2,13 @@ using DataFrames
 using Sockets
 
 # ============================================================================ #
-# [Structs & constants]                                                        #
-# ============================================================================ #
-
-const CLIENT_NAME = "ClickHouseJL"
-const DBMS_VER_MAJOR = 19
-const DBMS_VER_MINOR = 11
-const DBMS_VER_REV = 54423
-
-"ClickHouse client socket. Created using `connect`."
-mutable struct ClickHouseSock
-    io::Sockets.TCPSocket
-    tz::Union{String, Nothing}
-    client_info::ClientInfo
-end
-
-# ============================================================================ #
 # [Helpers]                                                                    #
 # ============================================================================ #
 
 function write_query(sock::ClickHouseSock, query::AbstractString)::Nothing
     query = ClientQuery("", sock.client_info, "", 2, 0, query)
-    write_packet(sock.io, query)
-    write_packet(sock.io, make_block())
+    write_packet(sock, query)
+    write_packet(sock, make_block())
     nothing
 end
 
@@ -70,28 +54,10 @@ function connect(
     username::AbstractString = "default",
     password::AbstractString = "",
 )::ClickHouseSock
-    sock = ClickHouseSock(
-        Sockets.connect(host, port),
-        nothing,
-        ClientInfo(
-            0x01,
-            "",
-            "",
-            "0.0.0.0:0",
-            0x01,
-            "",
-            "",
-            CLIENT_NAME,
-            DBMS_VER_MAJOR,
-            DBMS_VER_MINOR,
-            DBMS_VER_REV,
-            "",
-            2,
-        ),
-    )
+    sock = ClickHouseSock(Sockets.connect(host, port))
 
     # Say hello to the server!
-    write_packet(sock.io, ClickHouse.ClientHello(
+    write_packet(sock, ClickHouse.ClientHello(
         CLIENT_NAME,
         DBMS_VER_MAJOR,
         DBMS_VER_MINOR,
@@ -102,7 +68,7 @@ function connect(
     ))
 
     # Read server info.
-    server_info = read_server_packet(sock.io)::ServerInfo
+    server_info = read_server_packet(sock)::ServerInfo
     sock.tz = server_info.server_timezone
 
     sock
@@ -110,8 +76,8 @@ end
 
 "Send a ping request and wait for the response."
 function ping(sock::ClickHouseSock)::Nothing
-    write_packet(sock.io, ClientPing())
-    read_server_packet(sock.io)::ServerPong
+    write_packet(sock, ClientPing())
+    read_server_packet(sock)::ServerPong
     nothing
 end
 
@@ -121,7 +87,7 @@ function execute(
     ddl_query::AbstractString,
 )::Nothing
     write_query(sock, ddl_query)
-    read_server_packet(sock.io)::ServerEndOfStream
+    read_server_packet(sock)::ServerEndOfStream
     nothing
 end
 
@@ -137,19 +103,19 @@ function insert(
     # TODO: We might want to escape the table name here...
     write_query(sock, "INSERT INTO $(table) VALUES")
 
-    sample_block = read_server_packet(sock.io)::Block
+    sample_block = read_server_packet(sock)::Block
     valid_columns = Set([Symbol(x.name) for x ∈ sample_block.columns])
 
     for block_dict ∈ iter
         columns = dict2columns(block_dict, valid_columns)
         block = make_block(columns)
-        write_packet(sock.io, block)
+        write_packet(sock, block)
     end
 
     # Empty block = end of data.
-    write_packet(sock.io, make_block())
+    write_packet(sock, make_block())
 
-    read_server_packet(sock.io)::ServerEndOfStream
+    read_server_packet(sock)::ServerEndOfStream
 
     nothing
 end
@@ -162,12 +128,12 @@ function select_channel(
     Channel(ctype = Dict{Symbol, Any}) do ch
         write_query(sock, query)
 
-        sample_block = read_server_packet(sock.io)
+        sample_block = read_server_packet(sock)
         sample_block::Block
         @assert UInt64(sample_block.num_rows) == 0
 
         while true
-            packet = read_server_packet(sock.io)
+            packet = read_server_packet(sock)
 
             handle(x::ServerProfileInfo) = true
             handle(x::ServerProgress) = true

@@ -1,17 +1,45 @@
 import Base: UInt64, convert
 
 # ============================================================================ #
+# [Constants]                                                                  #
+# ============================================================================ #
+
+const CLIENT_NAME = "ClickHouseJL"
+const DBMS_VER_MAJOR = 19
+const DBMS_VER_MINOR = 11
+const DBMS_VER_REV = 54423
+
+# ============================================================================ #
 # [Context structs]                                                            #
 # ============================================================================ #
 
-struct ReadCtx
+"ClickHouse client socket. Created using `connect`."
+mutable struct ClickHouseSock
     io::IO
-    compress::Bool
-end
+    tz::Union{String, Nothing}
+    client_info
 
-struct WriteCtx
-    io::IO
-    compress::Bool
+    function ClickHouseSock(io::IO)::ClickHouseSock
+        new(
+            io,
+            nothing,
+            ClientInfo(
+                0x01,
+                "",
+                "",
+                "0.0.0.0:0",
+                0x01,
+                "",
+                "",
+                CLIENT_NAME,
+                DBMS_VER_MAJOR,
+                DBMS_VER_MINOR,
+                DBMS_VER_REV,
+                "",
+                2,
+            ),
+        )
+    end
 end
 
 # ============================================================================ #
@@ -24,21 +52,21 @@ VarUInt(x::Number) = reinterpret(VarUInt, UInt64(x))
 UInt64(x::VarUInt) = reinterpret(UInt64, x)
 Base.show(io::IO, x::VarUInt) = print(io, UInt64(x))
 
-function chwrite(ctx::WriteCtx, x::VarUInt)
+function chwrite(sock::ClickHouseSock, x::VarUInt)
     mx::UInt64 = x
     while mx >= 0x80
-        write(ctx.io, UInt8(mx & 0xFF) | 0x80)
+        write(sock.io, UInt8(mx & 0xFF) | 0x80)
         mx >>= 7
     end
-    write(ctx.io, UInt8(mx & 0xFF))
+    write(sock.io, UInt8(mx & 0xFF))
 end
 
-function chread(ctx::ReadCtx, ::Type{VarUInt})::VarUInt
+function chread(sock::ClickHouseSock, ::Type{VarUInt})::VarUInt
     x::UInt64 = 0
     s::UInt32 = 0
     i::UInt64 = 0
     while true
-        b = read(ctx.io, UInt8)
+        b = read(sock.io, UInt8)
         if b < 0x80
             if i > 9 || (i == 9 && b > 1)
                 throw(OverflowError("varint would overflow"))
@@ -57,56 +85,63 @@ end
 # ============================================================================ #
 
 # Scalar reads
-chread(ctx::ReadCtx, ::Type{T}) where T <: Number = read(ctx.io, T)
-chread(ctx::ReadCtx, x::UInt64)::Vector{UInt8} = read(ctx.io, x)
+chread(sock::ClickHouseSock, ::Type{T}) where T <: Number =
+    read(sock.io, T)
 
-function chread(ctx::ReadCtx, ::Type{String})::String
-    len = chread(ctx, VarUInt) |> UInt64
-    chread(ctx, len) |> String
+chread(sock::ClickHouseSock, x::UInt64)::Vector{UInt8} =
+    read(sock.io, x)
+
+function chread(sock::ClickHouseSock, ::Type{String})::String
+    len = chread(sock, VarUInt) |> UInt64
+    chread(sock, len) |> String
 end
 
 # Vector reads
 function chread(
-    ctx::ReadCtx,
+    sock::ClickHouseSock,
     ::Type{Vector{T}},
     count::VarUInt,
 )::Vector{T} where T <: Number
     data = Vector{T}(undef, UInt64(count))
-    read!(ctx.io, data)
+    read!(sock.io, data)
     data
 end
 
 chread(
-    ctx::ReadCtx,
+    sock::ClickHouseSock,
     ::Type{Vector{String}},
     count::VarUInt,
-)::Vector{String} = [chread(ctx, String) for _ ∈ 1:UInt64(count)]
+)::Vector{String} = [chread(sock, String) for _ ∈ 1:UInt64(count)]
 
 # ============================================================================ #
 # [chwrite impls for primitive types]                                          #
 # ============================================================================ #
 
 # Scalar writes
-chwrite(ctx::WriteCtx, x::Number) = write(ctx.io, x)
+chwrite(sock::ClickHouseSock, x::Number) =
+    write(sock.io, x)
 
-function chwrite(ctx::WriteCtx, x::String)
-    chwrite(ctx, x |> length |> VarUInt)
-    chwrite(ctx, x |> Array{UInt8})
+function chwrite(sock::ClickHouseSock, x::String)
+    chwrite(sock, x |> length |> VarUInt)
+    chwrite(sock, x |> Array{UInt8})
 end
 
 # Vector writes
-chwrite(ctx::WriteCtx, x::Vector{T}) where T <: Number = write(ctx.io, x)
-chwrite(ctx::WriteCtx, x::Vector{String}) = foreach(x -> chwrite(ctx, x), x)
+chwrite(sock::ClickHouseSock, x::Vector{T}) where T <: Number =
+    write(sock.io, x)
+
+chwrite(sock::ClickHouseSock, x::Vector{String}) =
+    foreach(x -> chwrite(sock, x), x)
 
 # ============================================================================ #
 # [Parse helpers]                                                              #
 # ============================================================================ #
 
 function impl_chread_for_ty(ty::Type)::Function
-    arg_exprs = [:(chread(ctx, $ty)) for ty ∈ ty.types]
+    arg_exprs = [:(chread(sock, $ty)) for ty ∈ ty.types]
     sym = split(ty.name |> string, '.')[end] |> Symbol
     reader = quote
-        function chread(ctx::ReadCtx, ::Type{$sym})::$sym
+        function chread(sock::ClickHouseSock, ::Type{$sym})::$sym
             $ty($(arg_exprs...))
         end
     end
@@ -114,9 +149,9 @@ function impl_chread_for_ty(ty::Type)::Function
 end
 
 function impl_chwrite_for_ty(ty::Type)::Function
-    write_stmts = [:(chwrite(ctx, x.$name)) for name ∈ fieldnames(ty)]
+    write_stmts = [:(chwrite(sock, x.$name)) for name ∈ fieldnames(ty)]
     writer = quote
-        function chwrite(ctx::WriteCtx, x::$(ty))
+        function chwrite(sock::ClickHouseSock, x::$(ty))
             $(write_stmts...)
         end
     end
@@ -139,15 +174,15 @@ struct BlockInfo
     BlockInfo(is_overflows, bucket_num) = new(is_overflows, bucket_num)
 end
 
-function chread(ctx::ReadCtx, ::Type{BlockInfo})::BlockInfo
+function chread(sock::ClickHouseSock, ::Type{BlockInfo})::BlockInfo
     is_overflows = false
     bucket_num = -1
 
-    while (field_num = UInt64(chread(ctx, VarUInt))) != BLOCK_INFO_FIELD_STOP
+    while (field_num = UInt64(chread(sock, VarUInt))) != BLOCK_INFO_FIELD_STOP
         if field_num == BLOCK_INFO_FIELD_OVERFLOWS
-            is_overflows = chread(ctx, Bool)
+            is_overflows = chread(sock, Bool)
         elseif field_num == BLOCK_INFO_FIELD_BUCKET_NUM
-            bucket_num = chread(ctx, Int32)
+            bucket_num = chread(sock, Int32)
         else
             throw("Unknown block info field")
         end
@@ -156,13 +191,13 @@ function chread(ctx::ReadCtx, ::Type{BlockInfo})::BlockInfo
     BlockInfo(is_overflows, bucket_num)
 end
 
-function chwrite(ctx::WriteCtx, x::BlockInfo)
+function chwrite(sock::ClickHouseSock, x::BlockInfo)
     # This mirrors what the C++ client does.
-    chwrite(ctx, VarUInt(BLOCK_INFO_FIELD_OVERFLOWS))
-    chwrite(ctx, x.is_overflows)
-    chwrite(ctx, VarUInt(BLOCK_INFO_FIELD_BUCKET_NUM))
-    chwrite(ctx, x.bucket_num)
-    chwrite(ctx, VarUInt(BLOCK_INFO_FIELD_STOP))
+    chwrite(sock, VarUInt(BLOCK_INFO_FIELD_OVERFLOWS))
+    chwrite(sock, x.is_overflows)
+    chwrite(sock, VarUInt(BLOCK_INFO_FIELD_BUCKET_NUM))
+    chwrite(sock, x.bucket_num)
+    chwrite(sock, VarUInt(BLOCK_INFO_FIELD_STOP))
 end
 
 struct Column
@@ -197,11 +232,11 @@ const COL_TYPE_REV_MAP = Dict(v => k for (k, v) ∈ COL_TYPE_MAP)
 
 # We can't just use chread here because we need the size to be passed
 # in from the `Block` decoder that holds the row count.
-function read_col(ctx::ReadCtx, num_rows::VarUInt)::Column
-    name = chread(ctx, String)
-    type_name = chread(ctx, String)
+function read_col(sock::ClickHouseSock, num_rows::VarUInt)::Column
+    name = chread(sock, String)
+    type_name = chread(sock, String)
     type = COL_TYPE_MAP[type_name]
-    data = chread(ctx, Vector{type}, num_rows)
+    data = chread(sock, Vector{type}, num_rows)
     Column(name, type_name, data)
 end
 
@@ -215,22 +250,22 @@ struct Block
     columns::Array{Column}
 end
 
-function chread(ctx::ReadCtx, ::Type{Block})::Block
-    temp_table = chread(ctx, String)
-    block_info = chread(ctx, BlockInfo)
-    num_columns = chread(ctx, VarUInt)
-    num_rows = chread(ctx, VarUInt)
-    columns = [read_col(ctx, num_rows) for _ ∈ 1:UInt64(num_columns)]
+function chread(sock::ClickHouseSock, ::Type{Block})::Block
+    temp_table = chread(sock, String)
+    block_info = chread(sock, BlockInfo)
+    num_columns = chread(sock, VarUInt)
+    num_rows = chread(sock, VarUInt)
+    columns = [read_col(sock, num_rows) for _ ∈ 1:UInt64(num_columns)]
     Block(temp_table, block_info, num_columns, num_rows, columns)
 end
 
-function chwrite(ctx::WriteCtx, x::Block)
-    chwrite(ctx, x.temp_table)
-    chwrite(ctx, x.block_info)
-    chwrite(ctx, x.num_columns)
-    chwrite(ctx, x.num_rows)
+function chwrite(sock::ClickHouseSock, x::Block)
+    chwrite(sock, x.temp_table)
+    chwrite(sock, x.block_info)
+    chwrite(sock, x.num_columns)
+    chwrite(sock, x.num_rows)
     for x ∈ x.columns
-        chwrite(ctx, x)
+        chwrite(sock, x)
     end
 end
 
@@ -292,13 +327,13 @@ struct ServerException
     nested::Union{Nothing, ServerException}
 end
 
-function chread(ctx::ReadCtx, ::Type{ServerException})::ServerException
-    code = chread(ctx, UInt32)
-    name = chread(ctx, String)
-    message = chread(ctx, String)
-    stack_trace = chread(ctx, String)
-    has_nested = chread(ctx, Bool)
-    nested = has_nested ? chread(ctx, ServerException) : nothing
+function chread(sock::ClickHouseSock, ::Type{ServerException})::ServerException
+    code = chread(sock, UInt32)
+    name = chread(sock, String)
+    message = chread(sock, String)
+    stack_trace = chread(sock, String)
+    has_nested = chread(sock, Bool)
+    nested = has_nested ? chread(sock, ServerException) : nothing
     ServerException(code, name, message, stack_trace, nested)
 end
 
@@ -409,22 +444,25 @@ const CLIENT_OPCODE_TY_MAP = Dict(
     CLIENT_PING => ClientPing,
 )
 
-function read_packet(io::IO, opcode_map::Dict{UInt64, DataType})::Any
-    ctx = ReadCtx(io, false)
-    opcode = chread(ctx, VarUInt)
+function read_packet(
+    sock::ClickHouseSock,
+    opcode_map::Dict{UInt64, DataType},
+)::Any
+    opcode = chread(sock, VarUInt)
     ty = opcode_map[UInt64(opcode)]
-    chread(ctx, ty)
+    chread(sock, ty)
 end
-
-read_client_packet(io::IO)::Any = read_packet(io, CLIENT_OPCODE_TY_MAP)
 
 "ClickHouse server-side exception."
 struct ClickHouseServerException <: Exception
     exc::ServerException
 end
 
-function read_server_packet(io::IO)::Any
-    packet = read_packet(io, SERVER_OPCODE_TY_MAP)
+read_client_packet(sock::ClickHouseSock)::Any =
+    read_packet(sock, CLIENT_OPCODE_TY_MAP)
+
+function read_server_packet(sock::ClickHouseSock)::Any
+    packet = read_packet(sock, SERVER_OPCODE_TY_MAP)
 
     if typeof(packet) == ServerException
         throw(ClickHouseServerException(packet))
@@ -439,11 +477,10 @@ end
 
 const CLIENT_TY_OPCODE_MAP = Dict(v => k for (k, v) ∈ CLIENT_OPCODE_TY_MAP)
 
-function write_packet(io::IO, packet::Any)
-    ctx = WriteCtx(io, false)
+function write_packet(sock::ClickHouseSock, packet::Any)
     opcode = CLIENT_TY_OPCODE_MAP[typeof(packet)]
-    chwrite(ctx, VarUInt(opcode))
-    chwrite(ctx, packet)
+    chwrite(sock, VarUInt(opcode))
+    chwrite(sock, packet)
 end
 
 # ============================================================================ #
