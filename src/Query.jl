@@ -14,19 +14,17 @@ end
 
 function dict2columns(
     dict::Dict{Symbol, T} where T,
-    valid_columns::Set{Symbol},
+    valid_columns::Dict{Symbol, String},
 )::Vector{Column}
     @assert begin
-        diff = symdiff(dict |> keys |> Set, valid_columns)
+        diff = symdiff(dict |> keys |> Set, valid_columns |> keys |> Set)
         isempty(diff)
     end "Mismatched columns: $(diff)"
 
+    # TODO: Check if column types match.
+
     [
-        Column(
-            string(name),
-            COL_TYPE_REV_MAP[typeof(first(column))],
-            column,
-        )
+        Column(string(name), valid_columns[name], column)
         for (name, column) ∈ dict
     ]
 end
@@ -69,7 +67,7 @@ function connect(
 
     # Read server info.
     server_info = read_server_packet(sock)::ServerInfo
-    sock.tz = server_info.server_timezone
+    sock.server_tz = server_info.server_timezone
 
     sock
 end
@@ -104,7 +102,10 @@ function insert(
     write_query(sock, "INSERT INTO $(table) VALUES")
 
     sample_block = read_server_packet(sock)::Block
-    valid_columns = Set([Symbol(x.name) for x ∈ sample_block.columns])
+    valid_columns = Dict(
+        Symbol(x.name) => x.type
+        for x ∈ sample_block.columns
+    )
 
     for block_dict ∈ iter
         columns = dict2columns(block_dict, valid_columns)

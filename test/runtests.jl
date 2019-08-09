@@ -2,6 +2,7 @@ using Test
 using ClickHouse
 using ClickHouse: read_client_packet, read_server_packet
 using DataFrames
+using Dates
 
 @test begin
     sock = IOBuffer([0xC2, 0x0A]) |> ClickHouseSock
@@ -155,7 +156,7 @@ end
     try
         execute(sock, """
             CREATE TABLE $(table)
-                (lul UInt64, oof Float32, foo String)
+                (lul UInt64, oof Float32, foo String, ddd Date)
             ENGINE = Memory
         """)
     catch exc
@@ -163,10 +164,12 @@ end
         occursin(r"Table .* already exists", exc.exc.message) || rethrow()
     end
 
+    td = today()
     data = Dict(
         :lul => UInt64[42, 1337, 123],
         :oof => Float32[0., ℯ, π],
         :foo => String["aa", "bb", "cc"],
+        :ddd => DateTime[td, td, td],
     )
 
     # Single block inserts.
@@ -182,13 +185,14 @@ end
     @test proj[:lul] == UInt64[42, 1337, 123, 42]
     @test proj[:oof] == Float32[0., ℯ, π, 0.]
     @test proj[:foo] == String["aa", "bb", "cc", "aa"]
+    @test proj[:ddd] == DateTime[td, td, td, td]
 
     # SELECT -> DF
     proj_df = select_df(sock, "SELECT * FROM $(table) LIMIT 3, 3")
     exp_df = DataFrame(data)
 
     # Normalize column order.
-    order = [:lul, :oof, :foo]
+    order = [:lul, :oof, :foo, :ddd]
     proj_df = proj_df[:, order]
     exp_df = exp_df[:, order]
 

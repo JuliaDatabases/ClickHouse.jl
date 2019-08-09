@@ -14,7 +14,6 @@ pkg> add https://github.com/athre0z/ClickHouse.jl.git
 - Int8, Int16, Int32, Int64
 - UInt8, UInt16, UInt32, UInt64
 - Date, DateTime
-    - currently represented as UInts -- this is subject of change
 
 All other types are currently not implemented. PRs welcome.
 

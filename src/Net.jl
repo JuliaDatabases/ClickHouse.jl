@@ -1,4 +1,5 @@
 import Base: UInt64, convert
+using Dates
 
 # ============================================================================ #
 # [Constants]                                                                  #
@@ -16,7 +17,7 @@ const DBMS_VER_REV = 54423
 "ClickHouse client socket. Created using `connect`."
 mutable struct ClickHouseSock
     io::IO
-    tz::Union{String, Nothing}
+    server_tz::Union{String, Nothing}
     client_info
 
     function ClickHouseSock(io::IO)::ClickHouseSock
@@ -224,11 +225,14 @@ const COL_TYPE_MAP = Dict(
     "Float64" => Float64,
 
     "String" => String,
-    "DateTime" => UInt32,
-    "Date" => UInt16,
+
+    "DateTime" => Int32,
+    "Date" => Int16,
 )
 
 const COL_TYPE_REV_MAP = Dict(v => k for (k, v) ∈ COL_TYPE_MAP)
+
+const SECS_IN_DAY = 24 * 60 * 60
 
 # We can't just use chread here because we need the size to be passed
 # in from the `Block` decoder that holds the row count.
@@ -237,10 +241,37 @@ function read_col(sock::ClickHouseSock, num_rows::VarUInt)::Column
     type_name = chread(sock, String)
     type = COL_TYPE_MAP[type_name]
     data = chread(sock, Vector{type}, num_rows)
+
+    if type_name == "DateTime"
+        data = unix2datetime.(data)
+    elseif type_name == "Date"
+        data = convert(Array{Int64}, data)
+        data .*= SECS_IN_DAY
+        data = unix2datetime.(data)
+    end
+
     Column(name, type_name, data)
 end
 
-impl_chwrite_for_ty(Column)
+function chwrite(sock::ClickHouseSock, x::Column)
+    chwrite(sock, x.name)
+    chwrite(sock, x.type)
+
+    data = if x.type == "DateTime"
+        d = datetime2unix.(x.data)
+        d = round.(d)
+        d = convert(Array{Int32}, d)
+    elseif x.type == "Date"
+        d = datetime2unix.(x.data)
+        d ./= convert(Float64, SECS_IN_DAY)
+        d = round.(d)
+        d = convert(Array{Int16}, d)
+    else
+        x.data
+    end
+
+    chwrite(sock, data)
+end
 
 struct Block
     temp_table::String
