@@ -107,6 +107,42 @@ end
     end
 end
 
+@testset "Decode server packets (enums)" begin
+    sock = open("enum/server.bin") |> ClickHouseSock
+
+    while !eof(sock.io)
+        packet = read_server_packet(sock)
+    end
+end
+
+@testset "Decode & re-encode client packets (enums)" begin
+    data = read(open("enum/client.bin"), 10_000, all = true)
+    sock = IOBuffer(data) |> ClickHouseSock
+
+    # Read packets.
+
+    packets = []
+    while !eof(sock.io)
+        packet = read_client_packet(sock)
+        push!(packets, packet)
+    end
+
+    @test eof(sock.io)
+
+    # Re-encode them.
+
+    sock = IOBuffer(UInt8[], write = true, read = true, maxsize = 10_000) |>
+        ClickHouseSock
+    for packet ∈ packets
+        ClickHouse.write_packet(sock, packet)
+    end
+
+    seek(sock.io, 0)
+    reencoded_data = read(sock.io, 10_000)
+
+    @test reencoded_data == data
+end
+
 @testset "Decode server packets (exception)" begin
     sock = open("error/server.bin") |> ClickHouseSock
 

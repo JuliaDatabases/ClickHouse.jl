@@ -209,29 +209,28 @@ end
 
 const COL_TYPE_MAP = Dict(
     # Unsigned
-    "UInt8" => UInt8,
-    "UInt16" => UInt16,
-    "UInt32" => UInt32,
-    "UInt64" => UInt64,
+    "UInt8"    => UInt8,
+    "UInt16"   => UInt16,
+    "UInt32"   => UInt32,
+    "UInt64"   => UInt64,
 
     # Signed
-    "Int8" => Int8,
-    "Int16" => Int16,
-    "Int32" => Int32,
-    "Int64" => Int64,
+    "Int8"     => Int8,
+    "Int16"    => Int16,
+    "Int32"    => Int32,
+    "Int64"    => Int64,
 
     # Floats
-    "Float32" => Float32,
-    "Float64" => Float64,
+    "Float32"  => Float32,
+    "Float64"  => Float64,
 
-    "String" => String,
+    "String"   => String,
 
     "DateTime" => Int32,
-    "Date" => Int16,
+    "Date"     => Int16,
 )
 
 const COL_TYPE_REV_MAP = Dict(v => k for (k, v) ∈ COL_TYPE_MAP)
-
 const SECS_IN_DAY = 24 * 60 * 60
 
 # We can't just use chread here because we need the size to be passed
@@ -239,8 +238,16 @@ const SECS_IN_DAY = 24 * 60 * 60
 function read_col(sock::ClickHouseSock, num_rows::VarUInt)::Column
     name = chread(sock, String)
     type_name = chread(sock, String)
-    type = COL_TYPE_MAP[type_name]
-    data = chread(sock, Vector{type}, num_rows)
+
+    decode_type_name = if startswith(type_name, "Enum")
+        para_idx = findfirst("(", type_name)[1]
+        "Int" * type_name[5:para_idx - 1]
+    else
+        type_name
+    end
+
+    decode_type = COL_TYPE_MAP[decode_type_name]
+    data = chread(sock, Vector{decode_type}, num_rows)
 
     if type_name == "DateTime"
         data = unix2datetime.(data)
@@ -248,6 +255,8 @@ function read_col(sock::ClickHouseSock, num_rows::VarUInt)::Column
         data = convert(Array{Int64}, data)
         data .*= SECS_IN_DAY
         data = unix2datetime.(data)
+    elseif startswith(type_name, "Enum")
+        # TODO: further decoding
     end
 
     Column(name, type_name, data)
