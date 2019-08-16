@@ -18,12 +18,14 @@ const DBMS_VER_REV = 54423
 mutable struct ClickHouseSock
     io::IO
     server_tz::Union{String, Nothing}
+    stringify_enums::Bool
     client_info
 
     function ClickHouseSock(io::IO)::ClickHouseSock
         new(
             io,
             nothing,
+            true,
             ClientInfo(
                 0x01,
                 "",
@@ -233,17 +235,34 @@ const COL_TYPE_MAP = Dict(
 const COL_TYPE_REV_MAP = Dict(v => k for (k, v) ∈ COL_TYPE_MAP)
 const SECS_IN_DAY = 24 * 60 * 60
 
+const ENUM_RE_OUTER = r"Enum(\d{1,2})\(\s*(.*)\)$"
+const ENUM_RE_INNER = r"""
+    (?:
+    '((?:(?:[^'])|(?:\\'))+)'
+    \s*=\s*
+    (-?\d+)
+    \s*,?\s*
+    )+?
+"""x
+
+function parse_enum_def(str::String)
+    def = match(ENUM_RE_OUTER, str)
+    matches = eachmatch(ENUM_RE_INNER, def[2])
+    map = Dict(x[1] => parse(Int64, x[2]) for x ∈ matches)
+    type = "Int" * def[1]
+    type, map
+end
+
 # We can't just use chread here because we need the size to be passed
 # in from the `Block` decoder that holds the row count.
 function read_col(sock::ClickHouseSock, num_rows::VarUInt)::Column
     name = chread(sock, String)
     type_name = chread(sock, String)
 
-    decode_type_name = if startswith(type_name, "Enum")
-        para_idx = findfirst("(", type_name)[1]
-        "Int" * type_name[5:para_idx - 1]
+    decode_type_name, enum_def = if startswith(type_name, "Enum")
+        parse_enum_def(type_name)
     else
-        type_name
+        type_name, nothing
     end
 
     decode_type = COL_TYPE_MAP[decode_type_name]
@@ -255,8 +274,9 @@ function read_col(sock::ClickHouseSock, num_rows::VarUInt)::Column
         data = convert(Array{Int64}, data)
         data .*= SECS_IN_DAY
         data = unix2datetime.(data)
-    elseif startswith(type_name, "Enum")
-        # TODO: further decoding
+    elseif sock.stringify_enums && startswith(type_name, "Enum")
+        imap = Dict(v => k for (k, v) ∈ enum_def)
+        data = [imap[x] for x ∈ data]
     end
 
     Column(name, type_name, data)
@@ -275,6 +295,11 @@ function chwrite(sock::ClickHouseSock, x::Column)
         d ./= convert(Float64, SECS_IN_DAY)
         d = round.(d)
         d = convert(Array{Int16}, d)
+    elseif startswith(x.type, "Enum")
+        ty, map = parse_enum_def(x.type)
+        d = [map[x] for x ∈ x.data]
+        ty = COL_TYPE_MAP[ty]
+        convert(Array{ty}, d)
     else
         x.data
     end
