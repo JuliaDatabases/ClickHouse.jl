@@ -295,7 +295,7 @@ function chwrite(sock::ClickHouseSock, x::Column)
         d ./= convert(Float64, SECS_IN_DAY)
         d = round.(d)
         d = convert(Array{Int16}, d)
-    elseif startswith(x.type, "Enum")
+    elseif sock.stringify_enums && startswith(x.type, "Enum")
         ty, map = parse_enum_def(x.type)
         d = [map[x] for x ∈ x.data]
         ty = COL_TYPE_MAP[ty]

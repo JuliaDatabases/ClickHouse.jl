@@ -121,35 +121,47 @@ function insert(
     nothing
 end
 
+"Execute a query, invoking a callback for each block."
+function select_callback(
+    callback::Function,
+    sock::ClickHouseSock,
+    query::AbstractString,
+)::Nothing
+    write_query(sock, query)
+
+    sample_block = read_server_packet(sock)
+    sample_block::Block
+    @assert UInt64(sample_block.num_rows) == 0
+
+    while true
+        packet = read_server_packet(sock)
+
+        handle(x::ServerProfileInfo) = true
+        handle(x::ServerProgress) = true
+        handle(x::ServerEndOfStream) = false
+
+        function handle(block::Block)
+            if UInt64(block.num_rows) != 0
+                block.columns |> columns2dict |> callback
+            end
+            true
+        end
+
+        if !handle(packet)
+            break
+        end
+    end
+end
+
 "Execute a query, streaming the resulting blocks through a channel."
 function select_channel(
     sock::ClickHouseSock,
-    query::AbstractString,
+    query::AbstractString;
+    csize = 0,
 )::Channel{Dict{Symbol, Any}}
-    Channel(ctype = Dict{Symbol, Any}) do ch
-        write_query(sock, query)
-
-        sample_block = read_server_packet(sock)
-        sample_block::Block
-        @assert UInt64(sample_block.num_rows) == 0
-
-        while true
-            packet = read_server_packet(sock)
-
-            handle(x::ServerProfileInfo) = true
-            handle(x::ServerProgress) = true
-            handle(x::ServerEndOfStream) = false
-
-            function handle(block::Block)
-                if UInt64(block.num_rows) != 0
-                    put!(ch, columns2dict(block.columns))
-                end
-                true
-            end
-
-            if !handle(packet)
-                break
-            end
+    Channel(ctype = Dict{Symbol, Any}, csize = csize) do ch
+        select_callback(sock, query) do row
+            put!(ch, row)
         end
     end
 end
@@ -160,13 +172,14 @@ function select(
     query::AbstractString,
 )::Dict{Symbol, Any}
     result = Dict{Symbol, Any}()
-    ch = select_channel(sock, query)
-    for row ∈ ch, (col_name, col_data) ∈ row
-        arr = get(result, col_name, nothing)
-        if arr === nothing
-            result[col_name] = col_data
-        else
-            append!(arr, col_data)
+    select_callback(sock, query) do block
+        for (col_name, col_data) ∈ block
+            arr = get(result, col_name, nothing)
+            if arr === nothing
+                result[col_name] = col_data
+            else
+                append!(arr, col_data)
+            end
         end
     end
     result
