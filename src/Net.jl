@@ -1,5 +1,6 @@
 import Base: UInt64, convert
 using Dates
+using CodecLz4
 
 # ============================================================================ #
 # [Constants]                                                                  #
@@ -19,12 +20,14 @@ mutable struct ClickHouseSock
     io::IO
     server_tz::Union{String, Nothing}
     stringify_enums::Bool
+    compress::Bool
     client_info
 
     function ClickHouseSock(io::IO)::ClickHouseSock
         new(
             io,
             nothing,
+            true,
             true,
             ClientInfo(
                 0x01,
@@ -317,20 +320,64 @@ end
 
 function chread(sock::ClickHouseSock, ::Type{Block})::Block
     temp_table = chread(sock, String)
-    block_info = chread(sock, BlockInfo)
-    num_columns = chread(sock, VarUInt)
-    num_rows = chread(sock, VarUInt)
-    columns = [read_col(sock, num_rows) for _ ∈ 1:UInt64(num_columns)]
-    Block(temp_table, block_info, num_columns, num_rows, columns)
+    main_io = sock.io
+    try
+        if sock.compress
+            hash = chread(sock, UInt128)
+            method = chread(sock, UInt8)
+            if method != 0x82
+                error("unsupported compression method")
+            end
+            compressed = chread(sock, UInt32)
+            original = chread(sock, UInt32)
+            comp_data = chread(sock, Vector{UInt8}, compressed)
+            decomp_data = transcode(LZ4Decompressor, comp_data)
+            sock.io = IOBuffer(decomp_data)
+        end
+
+        block_info = chread(sock, BlockInfo)
+        num_columns = chread(sock, VarUInt)
+        num_rows = chread(sock, VarUInt)
+        columns = [read_col(sock, num_rows) for _ ∈ 1:UInt64(num_columns)]
+        Block(temp_table, block_info, num_columns, num_rows, columns)
+    finally
+        sock.io = main_io
+    end
 end
 
 function chwrite(sock::ClickHouseSock, x::Block)
-    chwrite(sock, x.temp_table)
-    chwrite(sock, x.block_info)
-    chwrite(sock, x.num_columns)
-    chwrite(sock, x.num_rows)
-    for x ∈ x.columns
-        chwrite(sock, x)
+    main_io = sock.io
+    try
+        if sock.compress
+            sock.io = IOBuffer(read = true, write = true)
+        end
+
+        chwrite(sock, x.temp_table)
+        chwrite(sock, x.block_info)
+        chwrite(sock, x.num_columns)
+        chwrite(sock, x.num_rows)
+        for x ∈ x.columns
+            chwrite(sock, x)
+        end
+
+        if sock.compress
+            uncomp_data = take!(sock.io)
+            comp_data = transcode(LZ4Compressor, uncomp_data)
+            sock.io = main_io
+
+            if length(uncomp_data) > typemax(UInt32) ||
+                    length(comp_data) > typemax(UInt32)
+                throw(DomainError("Block too big"))
+            end
+
+            chwrite(sock, UInt8(0x82)) # method
+            chwrite(sock, UInt32(length(uncomp_data)))
+            chwrite(sock, UInt32(length(comp_data)))
+            chwrite(sock, UInt128(0)) # TODO: hash
+            chwrite(sock, comp_data)
+        end
+    finally
+        sock.io = main_io
     end
 end
 

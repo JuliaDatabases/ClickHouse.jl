@@ -6,7 +6,8 @@ using Sockets
 # ============================================================================ #
 
 function write_query(sock::ClickHouseSock, query::AbstractString)::Nothing
-    query = ClientQuery("", sock.client_info, "", 2, 0, query)
+    comp = sock.compress ? 1 : 0
+    query = ClientQuery("", sock.client_info, "", 2, comp, query)
     write_packet(sock, query)
     write_packet(sock, make_block())
     nothing
