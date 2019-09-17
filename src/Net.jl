@@ -407,6 +407,13 @@ end
 
 impl_chread_for_ty(ServerEndOfStream)
 
+struct ServerTableColumns
+    external_table_name::String
+    columns::String
+end
+
+impl_chread_for_ty(ServerTableColumns)
+
 # ============================================================================ #
 # [Client messages (wire format)]                                              #
 # ============================================================================ #
@@ -499,6 +506,7 @@ const SERVER_OPCODE_TY_MAP = Dict(
     SERVER_DATA => Block,
     SERVER_TOTALS => Block,
     SERVER_EXTREMES => Block,
+    SERVER_TABLE_COLUMNS => ServerTableColumns,
     SERVER_END_OF_STREAM => ServerEndOfStream,
 )
 

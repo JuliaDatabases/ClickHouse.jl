@@ -101,7 +101,13 @@ function insert(
     # TODO: We might want to escape the table name here...
     write_query(sock, "INSERT INTO $(table) VALUES")
 
-    sample_block = read_server_packet(sock)::Block
+    packet = read_server_packet(sock)
+    sample_block = if packet isa ServerTableColumns
+        read_server_packet(sock)::Block
+    else
+        packet::Block
+    end
+
     valid_columns = Dict(
         Symbol(x.name) => x.type
         for x ∈ sample_block.columns
