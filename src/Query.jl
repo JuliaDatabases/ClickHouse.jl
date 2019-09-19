@@ -1,5 +1,7 @@
 using DataFrames
+using ProgressMeter
 using Sockets
+
 
 # ============================================================================ #
 # [Helpers]                                                                    #
@@ -103,7 +105,7 @@ function insert(
 
     packet = read_server_packet(sock)
     sample_block = if packet isa ServerTableColumns
-        read_server_packet(sock)::Block
+        packet.sample_block
     else
         packet::Block
     end
@@ -131,7 +133,9 @@ end
 function select_callback(
     callback::Function,
     sock::ClickHouseSock,
-    query::AbstractString,
+    query::AbstractString;
+    show_progress::Bool = false,
+    progress_kwargs::Dict = Dict(),
 )::Nothing
     write_query(sock, query)
 
@@ -139,12 +143,29 @@ function select_callback(
     sample_block::Block
     @assert UInt64(sample_block.num_rows) == 0
 
+    progress_bar = nothing
+    progress_rows::Int64 = 0
     while true
         packet = read_server_packet(sock)
 
         handle(x::ServerProfileInfo) = true
-        handle(x::ServerProgress) = true
         handle(x::ServerEndOfStream) = false
+
+        function handle(x::ServerProgress)
+            if show_progress
+                if progress_bar === nothing
+                    progress_bar = Progress(
+                        x.total_rows |> UInt64 |> Int64;
+                        progress_kwargs...
+                    )
+                end
+                rows = x.rows |> UInt64 |> Int64
+                progress_rows += rows
+                update!(progress_bar, progress_rows)
+            end
+
+            true
+        end
 
         function handle(block::Block)
             if UInt64(block.num_rows) != 0
@@ -164,9 +185,10 @@ function select_channel(
     sock::ClickHouseSock,
     query::AbstractString;
     csize = 0,
+    kwargs...,
 )::Channel{Dict{Symbol, Any}}
     Channel(ctype = Dict{Symbol, Any}, csize = csize) do ch
-        select_callback(sock, query) do row
+        select_callback(sock, query; kwargs...) do row
             put!(ch, row)
         end
     end
@@ -175,10 +197,11 @@ end
 "Execute a query, flattening blocks into a single dict of column arrays."
 function select(
     sock::ClickHouseSock,
-    query::AbstractString,
+    query::AbstractString;
+    kwargs...
 )::Dict{Symbol, Any}
     result = Dict{Symbol, Any}()
-    select_callback(sock, query) do block
+    select_callback(sock, query; kwargs...) do block
         for (col_name, col_data) ∈ block
             arr = get(result, col_name, nothing)
             if arr === nothing
@@ -194,9 +217,10 @@ end
 "Execute a query, flattening blocks into a dataframe."
 function select_df(
     sock::ClickHouseSock,
-    query::AbstractString
+    query::AbstractString;
+    kwargs...
 )::DataFrame
-    columns = pairs(select(sock, query))
+    columns = pairs(select(sock, query; kwargs...))
     DataFrame(
         [x for (_, x) ∈ columns],
         [x for (x, _) ∈ columns],

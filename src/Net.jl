@@ -410,6 +410,7 @@ impl_chread_for_ty(ServerEndOfStream)
 struct ServerTableColumns
     external_table_name::String
     columns::String
+    sample_block::Block
 end
 
 impl_chread_for_ty(ServerTableColumns)
