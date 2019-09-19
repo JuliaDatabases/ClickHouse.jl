@@ -265,7 +265,15 @@ function read_col(sock::ClickHouseSock, num_rows::VarUInt)::Column
         type_name, nothing
     end
 
-    decode_type = COL_TYPE_MAP[decode_type_name]
+    decode_type = try
+        COL_TYPE_MAP[decode_type_name]
+    catch exc
+        if exc isa KeyError
+            error("Unsupported data type: $(decode_type_name)")
+        end
+        rethrow()
+    end
+
     data = chread(sock, Vector{decode_type}, num_rows)
 
     if type_name == "DateTime"
