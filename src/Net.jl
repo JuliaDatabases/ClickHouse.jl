@@ -130,10 +130,10 @@ function chwrite(sock::ClickHouseSock, x::String)
 end
 
 # Vector writes
-chwrite(sock::ClickHouseSock, x::Vector{T}) where T <: Number =
+chwrite(sock::ClickHouseSock, x::AbstractVector{T}) where T <: Number =
     write(sock.io, x)
 
-chwrite(sock::ClickHouseSock, x::Vector{String}) =
+chwrite(sock::ClickHouseSock, x::AbstractVector{String}) =
     foreach(x -> chwrite(sock, x), x)
 
 # ============================================================================ #
