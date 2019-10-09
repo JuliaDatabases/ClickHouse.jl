@@ -11,6 +11,6 @@ Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]
-julia = "1"
 DataFrames = ">= 0.19"
 ProgressMeter = ">= 1.1"
+julia = "1"

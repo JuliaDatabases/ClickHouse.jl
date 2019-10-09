@@ -19,6 +19,7 @@ mutable struct ClickHouseSock
     io::IO
     server_tz::Union{String, Nothing}
     stringify_enums::Bool
+    dirty::Bool
     client_info
 
     function ClickHouseSock(io::IO)::ClickHouseSock
@@ -26,6 +27,7 @@ mutable struct ClickHouseSock
             io,
             nothing,
             true,
+            false,
             ClientInfo(
                 0x01,
                 "",

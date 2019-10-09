@@ -42,6 +42,31 @@ function make_block(columns::Vector{Column} = Column[])::Block
     Block("", BlockInfo(), num_columns, num_rows, columns)
 end
 
+"""
+Check dirty state & mark as dirty.
+
+This is intententionally not a `guard(x) do y .. end` function because the
+closure would result in all captured variables to be boxed, resulting in
+runtime overhead. It is also intentional that the dirty flag isn't cleared
+in case of exceptions between `enter_dirty` and `exit_dirty`.
+"""
+function enter_dirty(sock::ClickHouseSock)::Nothing
+    !sock.dirty || error(
+        "The socket is dirty. This means that another query is either " *
+        "currently in progress or an error left the socket in a dirty state. " *
+        "Please create a new connection."
+    )
+
+    sock.dirty = true
+    nothing
+end
+
+function exit_dirty(sock::ClickHouseSock)::Nothing
+    @assert sock.dirty
+    sock.dirty = false
+    nothing
+end
+
 # ============================================================================ #
 # [Queries]                                                                    #
 # ============================================================================ #
@@ -76,8 +101,10 @@ end
 
 "Send a ping request and wait for the response."
 function ping(sock::ClickHouseSock)::Nothing
+    enter_dirty(sock)
     write_packet(sock, ClientPing())
     read_server_packet(sock)::ServerPong
+    exit_dirty(sock)
     nothing
 end
 
@@ -86,8 +113,10 @@ function execute(
     sock::ClickHouseSock,
     ddl_query::AbstractString,
 )::Nothing
+    enter_dirty(sock)
     write_query(sock, ddl_query)
     read_server_packet(sock)::ServerEndOfStream
+    exit_dirty(sock)
     nothing
 end
 
@@ -100,6 +129,8 @@ function insert(
     table::AbstractString,
     iter,
 )::Nothing where T
+    enter_dirty(sock)
+
     # TODO: We might want to escape the table name here...
     write_query(sock, "INSERT INTO $(table) VALUES")
 
@@ -126,6 +157,7 @@ function insert(
 
     read_server_packet(sock)::ServerEndOfStream
 
+    exit_dirty(sock)
     nothing
 end
 
@@ -137,6 +169,7 @@ function select_callback(
     show_progress::Bool = false,
     progress_kwargs::Dict = Dict(),
 )::Nothing
+    enter_dirty(sock)
     write_query(sock, query)
 
     sample_block = read_server_packet(sock)
@@ -178,6 +211,8 @@ function select_callback(
             break
         end
     end
+
+    exit_dirty(sock)
 end
 
 "Execute a query, streaming the resulting blocks through a channel."
