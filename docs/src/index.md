@@ -3,9 +3,13 @@
 ## Installation
 
 In order to enter `pkg>` mode, enter a REPL and press `]`, then:
-```
+```julia-repl
 pkg> add https://github.com/athre0z/ClickHouse.jl.git
 ```
+
+## Usage examples
+
+Usage examples can be found on the [usage page](@ref Usage).
 
 ## Supported data types
 
@@ -14,6 +18,7 @@ pkg> add https://github.com/athre0z/ClickHouse.jl.git
 - Int8, Int16, Int32, Int64
 - UInt8, UInt16, UInt32, UInt64
 - Date, DateTime
+- Enum
 
 All other types are currently not implemented. PRs welcome.
 
@@ -21,12 +26,12 @@ All other types are currently not implemented. PRs welcome.
 
 Transfer compression is currently not implemented.
 
-## Contents
-
-```@contents
-```
-
 ## Index
 
 ```@index
+```
+
+## Contents
+
+```@contents
 ```
