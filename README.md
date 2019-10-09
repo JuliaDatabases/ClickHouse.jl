@@ -4,9 +4,9 @@ ClickHouse.jl
 [![][doc-badge]][doc-url]
 [![][license-badge]][license-url]
 
-Pure Julia Lang implementation of a client for the ClickHouse TCP native API. Please refer to [the documentation][doc-url] for more information.
+Pure Julia Lang implementation of a client for the ClickHouse TCP native API.
 
-**This project is still very much work in progress, issues must be expected.**
+Please refer to [the documentation][doc-url] for more information.
 
 [doc-url]: https://athre0z.github.io/ClickHouse.jl/
 [doc-badge]: https://img.shields.io/badge/docs-dev-blue.svg
