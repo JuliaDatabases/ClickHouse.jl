@@ -266,6 +266,7 @@ function read_col(sock::ClickHouseSock, num_rows::VarUInt)::Column
         match(NULLABLE_RE, type_name)[1]
     else
         type_name
+    end
 
     decode_type_name, enum_def = if startswith(type_name, "Enum")
         parse_enum_def(type_name)
