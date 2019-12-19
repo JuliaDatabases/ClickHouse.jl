@@ -246,6 +246,8 @@ const ENUM_RE_INNER = r"""
     \s*,?\s*
     )+?
 """x
+    
+const NULLABLE_RE = r"Nullable\(\s*(.*)\)$"
 
 function parse_enum_def(str::String)
     def = match(ENUM_RE_OUTER, str)
@@ -260,9 +262,15 @@ end
 function read_col(sock::ClickHouseSock, num_rows::VarUInt)::Column
     name = chread(sock, String)
     type_name = chread(sock, String)
+    type_name = if startswith(type_name, "Nullable")
+        match(NULLABLE_RE, type_name)[1]
+    else
+        type_name
 
     decode_type_name, enum_def = if startswith(type_name, "Enum")
         parse_enum_def(type_name)
+    elseif startswith(type_name, "FixedString")
+        "String", nothing
     else
         type_name, nothing
     end
