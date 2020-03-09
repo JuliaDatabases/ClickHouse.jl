@@ -217,7 +217,7 @@ end
 
 "Execute a query, streaming the resulting blocks through a channel."
 function select_df_channel(
-    sock::ClickHouseSock,
+    sock::ClickHouseSock = connect(),
     query::AbstractString;
     csize = 0,
     kwargs...,
@@ -230,7 +230,7 @@ function select_df_channel(
 end
 
 function select_channel(
-    sock::ClickHouseSock,
+    sock::ClickHouseSock = connect(),
     query::AbstractString;
     csize = 0,
     kwargs...,
@@ -244,7 +244,7 @@ end
 
 "Execute a query, flattening blocks into a single dict of column arrays."
 function select(
-    sock::ClickHouseSock,
+    sock::ClickHouseSock = connect(),
     query::AbstractString;
     kwargs...
 )::Dict{Symbol, Any}
@@ -264,7 +264,7 @@ end
 
 "Execute a query, flattening blocks into a dataframe."
 function select_df(
-    sock::ClickHouseSock,
+    sock::ClickHouseSock = connect(),
     query::AbstractString;
     kwargs...
 )::DataFrame
