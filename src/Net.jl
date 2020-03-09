@@ -1,5 +1,6 @@
-import Base: UInt64, convert
+import Base: UInt64, convert, collect
 using Dates
+using CategoricalArrays
 
 # ============================================================================ #
 # [Constants]                                                                  #
@@ -112,11 +113,50 @@ function chread(
     data
 end
 
+Base.collect(t::Union{Type, DataType, Union{}}) = _collect(t, [])
+_collect(t::Type, list) = t<:Union{} ? push!(list, t) : _collect(t.b, push!(list, t.a))
+_collect(t::Union{DataType,Core.TypeofBottom}, list) = push!(list, t)
+
+function chread(
+    sock::ClickHouseSock,
+    ::Type{Vector{T}},
+    count::VarUInt,
+)::Vector{T} where T <: Union{Missing, Number}
+    type = (T -> for typeName in collect(T)
+                    if typeName !== Missing
+                        return typeName
+                    end
+                end
+    )(T)
+
+    isNull = Vector{Int8}(undef, UInt64(count))
+    data = Vector{type}(undef, UInt64(count))
+    read!(sock.io, isNull)
+    read!(sock.io, data)
+    data = convert(Array{T}, data)
+    map!(data, data, isNull) do x, flag
+        if flag == 1
+            return missing
+        else
+            return x
+        end
+    end
+    return data
+end
+
 chread(
     sock::ClickHouseSock,
     ::Type{Vector{String}},
     count::VarUInt,
 )::Vector{String} = [chread(sock, String) for _ ∈ 1:UInt64(count)]
+
+struct FixedString
+    length::Int
+end
+
+function chread(sock, ty::FixedString, count)::Vector{String}
+    [chread(sock, UInt64(ty.length)) |> String for _ ∈ 1:UInt64(count)]
+end
 
 # ============================================================================ #
 # [chwrite impls for primitive types]                                          #
@@ -240,14 +280,12 @@ const SECS_IN_DAY = 24 * 60 * 60
 const ENUM_RE_OUTER = r"Enum(\d{1,2})\(\s*(.*)\)$"
 const ENUM_RE_INNER = r"""
     (?:
-    '((?:(?:[^'])|(?:\\'))+)'
+    '((?:(?:[^'])|(?:\\'))*)'
     \s*=\s*
     (-?\d+)
     \s*,?\s*
     )+?
 """x
-    
-const NULLABLE_RE = r"Nullable\(\s*(.*)\)$"
 
 function parse_enum_def(str::String)
     def = match(ENUM_RE_OUTER, str)
@@ -262,40 +300,51 @@ end
 function read_col(sock::ClickHouseSock, num_rows::VarUInt)::Column
     name = chread(sock, String)
     type_name = chread(sock, String)
-    type_name = if startswith(type_name, "Nullable")
-        match(NULLABLE_RE, type_name)[1]
+
+    trim_type_name = if startswith(type_name, "Nullable")
+        type_name[10:end-1]
     else
         type_name
     end
-
-    decode_type_name, enum_def = if startswith(type_name, "Enum")
-        parse_enum_def(type_name)
-    elseif startswith(type_name, "FixedString")
-        "String", nothing
+        
+    decode_type_name, enum_def = if startswith(trim_type_name, "Enum")
+        parse_enum_def(trim_type_name)
     else
-        type_name, nothing
+        trim_type_name, nothing
     end
-
-    decode_type = try
-        COL_TYPE_MAP[decode_type_name]
-    catch exc
-        if exc isa KeyError
-            error("Unsupported data type: $(decode_type_name)")
+        
+    if startswith(decode_type_name, "FixedString(")
+        decode_type = decode_type_name |> Meta.parse |> eval
+    else
+        decode_type = try
+            COL_TYPE_MAP[decode_type_name]
+        catch exc
+            if exc isa KeyError
+                error("Unsupported data type: $(decode_type_name)")
+            end
+            rethrow()
         end
-        rethrow()
     end
 
-    data = chread(sock, Vector{decode_type}, num_rows)
+    if startswith(type_name, "Nullable")
+        decode_type = Union{Missing, decode_type}
+    end
 
-    if type_name == "DateTime"
+    data = if typeof(decode_type) == FixedString
+        chread(sock, decode_type, num_rows)
+    else
+        chread(sock, Vector{decode_type}, num_rows)
+    end
+
+    if trim_type_name == "DateTime"
         data = unix2datetime.(data)
-    elseif type_name == "Date"
+    elseif trim_type_name == "Date"
         data = convert(Array{Int64}, data)
         data .*= SECS_IN_DAY
-        data = unix2datetime.(data)
-    elseif sock.stringify_enums && startswith(type_name, "Enum")
+        data = Date.(unix2datetime.(data))
+    elseif sock.stringify_enums && startswith(trim_type_name, "Enum")
         imap = Dict(v => k for (k, v) ∈ enum_def)
-        data = [imap[x] for x ∈ data]
+        data = categorical([x===missing ? missing : imap[x] for x ∈ data], true)
     end
 
     Column(name, type_name, data)

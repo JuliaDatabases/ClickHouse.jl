@@ -216,21 +216,21 @@ function select_callback(
 end
 
 "Execute a query, streaming the resulting blocks through a channel."
-function select_channel(
+function select_into_chunks(
     sock::ClickHouseSock,
     query::AbstractString;
     csize = 0,
     kwargs...,
-)::Channel{Dict{Symbol, Any}}
-    Channel(ctype = Dict{Symbol, Any}, csize = csize) do ch
+)::Channel{DataFrame}
+    Channel(ctype = DataFrame, csize = csize) do ch
         select_callback(sock, query; kwargs...) do row
-            put!(ch, row)
+            put!(ch, DataFrame!(row))
         end
     end
 end
 
 "Execute a query, flattening blocks into a single dict of column arrays."
-function select(
+function select_as_dict(
     sock::ClickHouseSock,
     query::AbstractString;
     kwargs...
@@ -250,16 +250,12 @@ function select(
 end
 
 "Execute a query, flattening blocks into a dataframe."
-function select_df(
+function select_as_df(
     sock::ClickHouseSock,
     query::AbstractString;
     kwargs...
 )::DataFrame
-    columns = pairs(select(sock, query; kwargs...))
-    DataFrame(
-        [x for (_, x) ∈ columns],
-        [x for (x, _) ∈ columns],
-    )
+    DataFrame(select_as_dict(sock, query; kwargs...))
 end
 
 # ============================================================================ #
