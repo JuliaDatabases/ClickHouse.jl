@@ -268,7 +268,7 @@ function select_df(
     sock::ClickHouseSock = connect();
     kwargs...
 )::DataFrame
-    DataFrame(select(sock, query; kwargs...))
+    DataFrame(select(query, sock; kwargs...))
 end
 
 # ============================================================================ #
