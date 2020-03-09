@@ -237,7 +237,7 @@ function select_channel(
 )::Channel{Dict{Symbol, Any}}
     Channel(ctype = Dict{Symbol, Any}, csize = csize) do ch
         select_callback(sock, query; kwargs...) do row
-                put!(ch, row)
+            put!(ch, row)
         end
     end
 end

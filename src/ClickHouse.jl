@@ -13,5 +13,7 @@ export select_df_channel
 export insert
 export execute
 export connect
+export ping
+export ClickHouseServerException
 
 end # module
