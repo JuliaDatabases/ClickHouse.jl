@@ -307,7 +307,14 @@ function chwrite(sock::ClickHouseSock, x::Column)
         d = convert(Array{Int16}, d)
     elseif sock.stringify_enums && startswith(x.type, "Enum")
         ty, map = parse_enum_def(x.type)
-        d = [map[x] for x ∈ x.data]
+        try
+            d = [map[x] for x ∈ x.data]
+        catch exc
+            if exc isa KeyError
+                error("Value is not a valid enum variant: $(exc.key)")
+            end
+            rethrow()
+        end
         ty = COL_TYPE_MAP[ty]
         convert(Array{ty}, d)
     else
