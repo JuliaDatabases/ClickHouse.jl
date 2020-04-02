@@ -255,11 +255,7 @@ function select_df(
     query::AbstractString;
     kwargs...
 )::DataFrame
-    columns = pairs(select(sock, query; kwargs...))
-    DataFrame(
-        [x for (_, x) ∈ columns],
-        [x for (x, _) ∈ columns],
-    )
+    select(sock, query; kwargs...) |> pairs |> DataFrame
 end
 
 # ============================================================================ #
