@@ -187,17 +187,23 @@ end
 
 @testset "Queries on localhost DB" begin
     table = "ClickHouseJL_Test"
-    sock = connect("localhost", 9000)
+    sock = connect()
 
     try
         execute(sock, """
-            CREATE TABLE $(table)
-                (lul UInt64, oof Float32, foo String, ddd Date)
+            CREATE TABLE $(table) (
+                lul UInt64,
+                oof Float32,
+                foo String,
+                ddd Date,
+                enu Enum8('a' = 1, 'c' = 3, 'foobar' = 44, 'd' = 9)
+            )
             ENGINE = Memory
         """)
     catch exc
         exc::ClickHouseServerException
         occursin(r"Table .* already exists", exc.exc.message) || rethrow()
+        sock = connect()
     end
 
     td = today()
@@ -206,6 +212,7 @@ end
         :oof => Float32[0., ℯ, π],
         :foo => String["aa", "bb", "cc"],
         :ddd => DateTime[td, td, td],
+        :enu => ["a", "c", "foobar"],
     )
 
     # Single block inserts.
