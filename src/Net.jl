@@ -1,5 +1,6 @@
 import Base: UInt64, convert
 using Dates
+using CategoricalArrays
 
 # ============================================================================ #
 # [Constants]                                                                  #
@@ -18,7 +19,6 @@ const DBMS_VER_REV = 54423
 mutable struct ClickHouseSock
     io::IO
     server_tz::Union{String, Nothing}
-    stringify_enums::Bool
     dirty::Bool
     client_info
 
@@ -26,7 +26,6 @@ mutable struct ClickHouseSock
         new(
             io,
             nothing,
-            true,
             false,
             ClientInfo(
                 0x01,
@@ -284,9 +283,9 @@ function read_col(sock::ClickHouseSock, num_rows::VarUInt)::Column
         data = convert(Array{Int64}, data)
         data .*= SECS_IN_DAY
         data = unix2datetime.(data)
-    elseif sock.stringify_enums && startswith(type_name, "Enum")
+    elseif startswith(type_name, "Enum")
         imap = Dict(v => k for (k, v) ∈ enum_def)
-        data = [imap[x] for x ∈ data]
+        data = recode(data, imap...)
     end
 
     Column(name, type_name, data)
@@ -305,8 +304,9 @@ function chwrite(sock::ClickHouseSock, x::Column)
         d ./= convert(Float64, SECS_IN_DAY)
         d = round.(d)
         d = convert(Array{Int16}, d)
-    elseif sock.stringify_enums && startswith(x.type, "Enum")
+    elseif startswith(x.type, "Enum")
         ty, map = parse_enum_def(x.type)
+        # TODO: this could be faster for categorical arrays.
         try
             d = [map[x] for x ∈ x.data]
         catch exc
