@@ -4,7 +4,7 @@
 
 In order to enter `pkg>` mode, enter a REPL and press `]`, then:
 ```julia-repl
-pkg> add https://github.com/athre0z/ClickHouse.jl.git
+pkg> add ClickHouse
 ```
 
 ## Usage examples
