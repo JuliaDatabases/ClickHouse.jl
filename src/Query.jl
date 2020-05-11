@@ -115,7 +115,18 @@ function execute(
 )::Nothing
     enter_dirty(sock)
     write_query(sock, ddl_query)
-    read_server_packet(sock)::ServerEndOfStream
+
+    while true
+        packet = read_server_packet(sock)
+        if packet isa ServerProgress
+            # we just ignore these for DDL queries for now.
+        elseif packet isa ServerEndOfStream
+            break
+        else
+            error("Unexpected packet received: $(packet)")
+        end
+    end
+
     exit_dirty(sock)
     nothing
 end

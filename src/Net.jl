@@ -284,8 +284,8 @@ function read_col(sock::ClickHouseSock, num_rows::VarUInt)::Column
         data .*= SECS_IN_DAY
         data = unix2datetime.(data)
     elseif startswith(type_name, "Enum")
-        imap = Dict(v => k for (k, v) ∈ enum_def)
-        data = recode(data, imap...)
+        inv_map = Dict(v => k for (k, v) ∈ enum_def)
+        data = recode(data, inv_map...)
     end
 
     Column(name, type_name, data)
