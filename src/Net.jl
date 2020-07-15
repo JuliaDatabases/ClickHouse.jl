@@ -141,25 +141,27 @@ chwrite(sock::ClickHouseSock, x::AbstractVector{String}) =
 # [Parse helpers]                                                              #
 # ============================================================================ #
 
-function impl_chread_for_ty(ty::Type)::Function
-    arg_exprs = [:(chread(sock, $ty)) for ty ∈ ty.types]
-    sym = split(ty.name |> string, '.')[end] |> Symbol
-    reader = quote
-        function chread(sock::ClickHouseSock, ::Type{$sym})::$sym
-            $ty($(arg_exprs...))
-        end
+function chread(sock::ClickHouseSock, ::Type{T}) where {T}
+    if @generated
+        arg_exprs = [:(chread(sock, $t)) for t ∈ fieldtypes(T)]
+        return :($T($(arg_exprs...)))
+    else
+        return T((chread(sock, t) for t in fieldtypes(T)))
     end
-    eval(reader)
 end
 
-function impl_chwrite_for_ty(ty::Type)::Function
-    write_stmts = [:(chwrite(sock, x.$name)) for name ∈ fieldnames(ty)]
-    writer = quote
-        function chwrite(sock::ClickHouseSock, x::$(ty))
-            $(write_stmts...)
+function chwrite(sock::ClickHouseSock, x::T) where {T}
+    if @generated
+        block = Expr(:block)
+        for i = 1:fieldcount(T)
+            push!(block.args, :(chwrite(sock, getfield(x, $i))))
+        end
+        return block
+    else
+        for i = 1:fieldcount(T)
+            chwrite(sock, getfield(x, i))
         end
     end
-    eval(writer)
 end
 
 # ============================================================================ #
@@ -371,12 +373,8 @@ struct ServerInfo
     server_version_patch::VarUInt
 end
 
-impl_chread_for_ty(ServerInfo)
-
 struct ServerPong
 end
-
-impl_chread_for_ty(ServerPong)
 
 struct ServerProgress
     rows::VarUInt
@@ -388,8 +386,6 @@ struct ServerProgress
     written_bytes::VarUInt
 end
 
-impl_chread_for_ty(ServerProgress)
-
 struct ServerProfileInfo
     rows::VarUInt
     blocks::VarUInt
@@ -398,8 +394,6 @@ struct ServerProfileInfo
     rows_before_limit::VarUInt
     calc_rows_before_limit::Bool
 end
-
-impl_chread_for_ty(ServerProfileInfo)
 
 struct ServerException
     code::UInt32
@@ -422,15 +416,11 @@ end
 struct ServerEndOfStream
 end
 
-impl_chread_for_ty(ServerEndOfStream)
-
 struct ServerTableColumns
     external_table_name::String
     columns::String
     sample_block::Block
 end
-
-impl_chread_for_ty(ServerTableColumns)
 
 # ============================================================================ #
 # [Client messages (wire format)]                                              #
@@ -446,14 +436,8 @@ struct ClientHello
     password::String
 end
 
-impl_chwrite_for_ty(ClientHello)
-impl_chread_for_ty(ClientHello)
-
 struct ClientPing
 end
-
-impl_chwrite_for_ty(ClientPing)
-impl_chread_for_ty(ClientPing)
 
 struct ClientInfo
     query_kind::UInt8
@@ -471,9 +455,6 @@ struct ClientInfo
     client_ver_patch::VarUInt # DBMS_MIN_REVISION_WITH_VERSION_PATCH
 end
 
-impl_chwrite_for_ty(ClientInfo)
-impl_chread_for_ty(ClientInfo)
-
 struct ClientQuery
     query_id::String
     client_info::ClientInfo
@@ -482,9 +463,6 @@ struct ClientQuery
     compression::VarUInt
     query::String
 end
-
-impl_chwrite_for_ty(ClientQuery)
-impl_chread_for_ty(ClientQuery)
 
 # ============================================================================ #
 # [Opcodes]                                                                    #
