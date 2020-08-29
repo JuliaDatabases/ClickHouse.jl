@@ -1,10 +1,6 @@
-
-
-
-
-
 function _parse_typestring(s::AbstractString)
     s = strip(s)
+
     (isempty(s)||s[1]=='(') && error("typename parse error in $S")
     brace_pos = findfirst("(", s)
     if isnothing(brace_pos)
@@ -19,6 +15,7 @@ function _parse_typestring(s::AbstractString)
 
     ast = TypeAst(type_name)
     inner = SubString(s, brace_pos + 1, length(s) - 1)
+
     cursor = 1
     elem_pos = 1
     opened_braces = 0
@@ -26,7 +23,8 @@ function _parse_typestring(s::AbstractString)
         range = findnext(r"\(|\)|,", inner, cursor)
 
         if isnothing(range) || isempty(range)
-            if elem_pos < length(inner)
+
+            if elem_pos <= length(inner)
                 push!(ast, _parse_typestring(inner[elem_pos:end]))
             end
             break

@@ -1,6 +1,7 @@
 using ClickHouse: Column, chwrite, chread, read_col, VarUInt, parse_typestring
 using Dates
 using CategoricalArrays
+using UUIDs
 
 @testset "Parse type" begin
     r = parse_typestring("Int32")
@@ -17,6 +18,26 @@ using CategoricalArrays
     @test r.args[1] == "'a' = 10"
     @test r.args[2] == "'b'=1"
     @test r.args[3] == "'addd' = 45"
+
+    r = parse_typestring(" FixedString(4)")
+    @test r.name == :FixedString
+    @test r.args[1] == "4"
+    r = parse_typestring(" FixedString(44)")
+    @test r.name == :FixedString
+    @test r.args[1] == "44"
+
+    r = parse_typestring("Tuple(Int64, String)")
+    @test r.name == :Tuple
+    @test r.args[1].name == :Int64
+    @test r.args[2].name == :String
+
+    r = parse_typestring("Tuple(Enum16('a' = 10), Tuple(Int32, Float32))")
+    @test r.name == :Tuple
+    @test r.args[1].name == :Enum16
+    @test r.args[1].args[1] == "'a' = 10"
+    @test r.args[2].name == :Tuple
+    @test r.args[2].args[1].name == :Int32
+    @test r.args[2].args[2].name == :Float32
 end
 
 @testset "Int columns" begin
@@ -41,6 +62,31 @@ end
     res = read_col(sock, VarUInt(nrows))
     @test res == column
 
+end
+
+@testset "Fixed String columns" begin
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = string.(rand(["aaaa", "bbbb", "cccc", "dddd"], nrows))
+    column = Column("test", "FixedString(4)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
+    sock = ClickHouseSock(PipeBuffer())
+    data = string.(rand(["aaaaa", "bbbb", "cccc", "dddd"], nrows))
+    column = Column("test", "FixedString(4)", data)
+    @test_throws ErrorException chwrite(sock, column)
+
+
+    sock = ClickHouseSock(PipeBuffer())
+    data = string.(rand(["aaaa", "bbbb", "cccc", "dddd"], nrows))
+    column = Column("test", "FixedString(5)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test all(s->length(s)==5, res.data)
+    @test res.data == data.* " "
 end
 
 @testset "Date columns" begin
@@ -93,3 +139,47 @@ end
 
 end
 
+
+@testset "UUID columns" begin
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = Vector{UUID}(undef, nrows)
+    data .= uuid4()
+    column = Column("test", "UUID", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
+end
+
+@testset "Tuple columns" begin
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = tuple.(rand(Int64, nrows), rand(Int8, nrows))
+    column = Column("test", "Tuple(Int64, Int8)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = tuple.(rand(Int64, nrows), string.(rand(Int8, nrows)))
+    column = Column("test", "Tuple(Int64, String)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = tuple.(
+        rand(["aa", "bb", "ccc"], nrows),
+        tuple.(rand(Int16, nrows))
+        )
+    column = Column("test", "Tuple(Enum16('aa' = 1, 'bb' = 2, 'ccc' = 10), Tuple(Int16))", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
+end

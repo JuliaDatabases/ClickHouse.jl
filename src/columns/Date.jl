@@ -6,7 +6,7 @@ function read_col_data(sock::ClickHouseSock, num_rows::VarUInt, ::Val{:Date})
 
 end
 
-function write_col_data(sock::ClickHouseSock, data::AbstractVector{Date}, ::Val{:Date}) where {N}
+function write_col_data(sock::ClickHouseSock, data::AbstractVector{Date}, ::Val{:Date})
     d = Vector{UInt16}(undef, length(data))
     d .= Dates.value.(data .- Date(1970))
     chwrite(sock, d)
