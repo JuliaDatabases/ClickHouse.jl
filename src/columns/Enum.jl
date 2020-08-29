@@ -1,5 +1,5 @@
-is_ch_typename(::Val{:Enum8})  = true
-is_ch_typename(::Val{:Enum16})  = true
+is_ch_type(::Val{:Enum8})  = true
+is_ch_type(::Val{:Enum16})  = true
 
 const ENUM_RE_ARG = r"""
 
@@ -19,7 +19,8 @@ function make_enum_map(::Type{BaseT}, args...) where {BaseT}
     return map
 end
 
-function read_enum_data(sock::ClickHouseSock, num_rows::VarUInt, ::Type{BaseT}, args...) where {BaseT}
+function read_enum_data(sock::ClickHouseSock, num_rows::VarUInt,
+                                        ::Type{BaseT}, args...) where {BaseT}
     map = make_enum_map(BaseT, args...)
     levels = collect(keys(map))
     enum_to_level = Dict(zip(values(map), 1:length(map)))
@@ -30,7 +31,8 @@ function read_enum_data(sock::ClickHouseSock, num_rows::VarUInt, ::Type{BaseT}, 
     return result
 end
 
-function write_enum_data(sock::ClickHouseSock, data::AbstractVector{String}, ::Type{BaseT}, args...) where {BaseT}
+function write_enum_data(sock::ClickHouseSock, data::AbstractVector{String},
+                                        ::Type{BaseT}, args...) where {BaseT}
     map = make_enum_map(BaseT, args...)
     d = Vector{BaseT}(undef, length(data))
     try
@@ -44,7 +46,8 @@ function write_enum_data(sock::ClickHouseSock, data::AbstractVector{String}, ::T
     chwrite(sock, d)
 end
 
-function write_enum_data(sock::ClickHouseSock, data::CategoricalVector{String}, ::Type{BaseT}, args...) where {BaseT}
+function write_enum_data(sock::ClickHouseSock, data::CategoricalVector{String},
+                                        ::Type{BaseT}, args...) where {BaseT}
     map = make_enum_map(BaseT, args...)
     try
 
@@ -62,12 +65,28 @@ function write_enum_data(sock::ClickHouseSock, data::CategoricalVector{String}, 
 
 end
 
-read_col_data(sock::ClickHouseSock, num_rows::VarUInt, ::Val{:Enum8}, args...) = read_enum_data(sock, num_rows, Int8, args...)
-read_col_data(sock::ClickHouseSock, num_rows::VarUInt, ::Val{:Enum16}, args...) = read_enum_data(sock, num_rows, Int16, args...)
+read_col_data(sock::ClickHouseSock, num_rows::VarUInt, ::Val{:Enum8}, args...) =
+                     read_enum_data(sock, num_rows, Int8, args...)
+read_col_data(sock::ClickHouseSock, num_rows::VarUInt, ::Val{:Enum16}, args...) =
+                    read_enum_data(sock, num_rows, Int16, args...)
 
 
-write_col_data(sock::ClickHouseSock, data::AbstractVector{String}, ::Val{:Enum8}, args...) = write_enum_data(sock, data, Int8, args...)
-write_col_data(sock::ClickHouseSock, data::AbstractVector{String}, ::Val{:Enum16}, args...) = write_enum_data(sock, data, Int16, args...)
+write_col_data(sock::ClickHouseSock,
+        data::AbstractVector{String},
+         ::Val{:Enum8},
+         args...) = write_enum_data(sock, data, Int8, args...)
 
-write_col_data(sock::ClickHouseSock, data::CategoricalVector{String}, ::Val{:Enum8}, args...) = write_enum_data(sock, data, Int8, args...)
-write_col_data(sock::ClickHouseSock, data::CategoricalVector{String}, ::Val{:Enum16}, args...) = write_enum_data(sock, data, Int16, args...)
+write_col_data(sock::ClickHouseSock,
+                data::AbstractVector{String},
+                ::Val{:Enum16},
+                 args...) = write_enum_data(sock, data, Int16, args...)
+
+write_col_data(sock::ClickHouseSock,
+             data::CategoricalVector{String},
+             ::Val{:Enum8},
+             args...) = write_enum_data(sock, data, Int8, args...)
+
+write_col_data(sock::ClickHouseSock,
+            data::CategoricalVector{String},
+            ::Val{:Enum16}, args...) =
+            write_enum_data(sock, data, Int16, args...)

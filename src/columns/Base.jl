@@ -1,17 +1,21 @@
-macro _trivia_columns(args...)
+macro _primitive_columns(args...)
     funcs = Expr[]
     for arg in args
         arg_string = string(arg)
-        push!(funcs, quote is_ch_typename(::Val{Symbol($arg_string)}) = true end)
+        push!(funcs, quote is_ch_type(::Val{Symbol($arg_string)}) = true end)
         push!(funcs, quote
-                function read_col_data(sock::ClickHouseSock, num_rows::VarUInt, ::Val{Symbol($arg_string)})
-                    return chread(sock, Vector{$arg}, num_rows)
-                end
+            function read_col_data(sock::ClickHouseSock,
+                     num_rows::VarUInt,
+                    ::Val{Symbol($arg_string)})
+                return chread(sock, Vector{$arg}, num_rows)
+            end
         end )
         push!(funcs, quote
-                function write_col_data(sock::ClickHouseSock, data::AbstractVector{$arg}, ::Val{Symbol($arg_string)})
-                    return chwrite(sock, data)
-                end
+            function write_col_data(sock::ClickHouseSock,
+                data::AbstractVector{$arg},
+                ::Val{Symbol($arg_string)})
+                return chwrite(sock, data)
+            end
         end )
         push!(funcs, quote deserialize(::Val{Symbol($arg_string)}) = $arg end )
     end
@@ -19,7 +23,7 @@ macro _trivia_columns(args...)
 end
 
 
-@_trivia_columns(
+@_primitive_columns(
     UInt8,
     UInt16,
     UInt32,

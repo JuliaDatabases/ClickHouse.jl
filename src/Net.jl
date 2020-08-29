@@ -212,7 +212,8 @@ struct Column
     data::Any
 end
 
-Base.:(==)(a::Column, b::Column) =  a.name == b.name && a.type == b.type && a.data == b.data
+Base.:(==)(a::Column, b::Column) =
+    a.name == b.name && a.type == b.type && a.data == b.data
 
 
 # We can't just use chread here because we need the size to be passed
@@ -221,8 +222,7 @@ function read_col(sock::ClickHouseSock, num_rows::VarUInt)::Column
     name = chread(sock, String)
     type_name = chread(sock, String)
 
-    data = read_col_data(sock, num_rows, type_name)
-
+    data = read_col_data(sock, num_rows, parse_typestring(type_name))
     Column(name, type_name, data)
 end
 
@@ -230,7 +230,7 @@ function chwrite(sock::ClickHouseSock, x::Column)
     chwrite(sock, x.name)
     chwrite(sock, x.type)
 
-    write_col_data(sock, x.data, x.type)
+    write_col_data(sock, x.data, parse_typestring(x.type))
 end
 
 struct Block

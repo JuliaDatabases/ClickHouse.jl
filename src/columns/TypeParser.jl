@@ -5,13 +5,13 @@ function _parse_typestring(s::AbstractString)
     brace_pos = findfirst("(", s)
     if isnothing(brace_pos)
         type_name = Symbol(s)
-        return is_ch_typename(type_name) ? TypeAst(type_name) : s
+        return is_ch_type(type_name) ? TypeAst(type_name) : s
 
     end
     brace_pos = brace_pos[1]
     s[end] != ')' && error("typename parse error in $s")
     type_name = Symbol(strip(s[1:brace_pos-1]))
-    !is_ch_typename(type_name) && error("typename parse error in $S")
+    !is_ch_type(type_name) && error("typename parse error in $s")
 
     ast = TypeAst(type_name)
     inner = SubString(s, brace_pos + 1, length(s) - 1)
