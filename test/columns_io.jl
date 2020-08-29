@@ -1,5 +1,24 @@
-using ClickHouse: Column, chwrite, chread, read_col, VarUInt
+using ClickHouse: Column, chwrite, chread, read_col, VarUInt, parse_typestring
 using Dates
+using CategoricalArrays
+
+@testset "Parse type" begin
+    r = parse_typestring("Int32")
+    @test r.name == :Int32
+    @test_throws ErrorException parse_typestring("KKKK")
+
+    r = parse_typestring("   String  ")
+    @test r.name == :String
+
+    r = parse_typestring("   Enum8('a' = 10, 'b'=1, 'addd' = 45)  ")
+
+    @test r.name == :Enum8
+    @test length(r.args) == 3
+    @test r.args[1] == "'a' = 10"
+    @test r.args[2] == "'b'=1"
+    @test r.args[3] == "'addd' = 45"
+end
+
 @testset "Int columns" begin
 
     sock = ClickHouseSock(PipeBuffer())
@@ -23,7 +42,7 @@ end
     @test res == column
 
 end
-#= FIXME not working now becouse of wrong type work in origin package
+
 @testset "Date columns" begin
 
     sock = ClickHouseSock(PipeBuffer())
@@ -34,7 +53,7 @@ end
     res = read_col(sock, VarUInt(nrows))
     @test res == column
 
-end=#
+end
 
 @testset "DateTime columns" begin
 
@@ -57,6 +76,19 @@ end
     column = Column("test", "Enum8('a'=1,'b'=3,'c'=10)", data)
     chwrite(sock, column)
     res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
+end
+
+@testset "Enum columns categorial in" begin
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = CategoricalVector(rand(["a","b","c"], nrows))
+    column = Column("test", "Enum8('a'=1,'b'=3,'c'=10)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+
     @test res == column
 
 end

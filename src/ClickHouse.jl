@@ -1,6 +1,7 @@
 module ClickHouse
 
 include("Net.jl")
+include("columns/columns.jl")
 include("Query.jl")
 
 export ClickHouseSock

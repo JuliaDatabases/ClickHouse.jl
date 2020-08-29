@@ -215,83 +215,13 @@ end
 Base.:(==)(a::Column, b::Column) =  a.name == b.name && a.type == b.type && a.data == b.data
 
 
-const COL_TYPE_MAP = Dict(
-    # Unsigned
-    "UInt8"    => UInt8,
-    "UInt16"   => UInt16,
-    "UInt32"   => UInt32,
-    "UInt64"   => UInt64,
-
-    # Signed
-    "Int8"     => Int8,
-    "Int16"    => Int16,
-    "Int32"    => Int32,
-    "Int64"    => Int64,
-
-    # Floats
-    "Float32"  => Float32,
-    "Float64"  => Float64,
-
-    "String"   => String,
-
-    "DateTime" => Int32,
-    "Date"     => Int16,
-)
-
-const COL_TYPE_REV_MAP = Dict(v => k for (k, v) ∈ COL_TYPE_MAP)
-const SECS_IN_DAY = 24 * 60 * 60
-
-const ENUM_RE_OUTER = r"Enum(\d{1,2})\(\s*(.*)\)$"
-const ENUM_RE_INNER = r"""
-    (?:
-    '((?:(?:[^'])|(?:\\'))+)'
-    \s*=\s*
-    (-?\d+)
-    \s*,?\s*
-    )+?
-"""x
-
-function parse_enum_def(str::String)
-    def = match(ENUM_RE_OUTER, str)
-    matches = eachmatch(ENUM_RE_INNER, def[2])
-    map = Dict(x[1] => parse(Int64, x[2]) for x ∈ matches)
-    type = "Int" * def[1]
-    type, map
-end
-
 # We can't just use chread here because we need the size to be passed
 # in from the `Block` decoder that holds the row count.
 function read_col(sock::ClickHouseSock, num_rows::VarUInt)::Column
     name = chread(sock, String)
     type_name = chread(sock, String)
 
-    decode_type_name, enum_def = if startswith(type_name, "Enum")
-        parse_enum_def(type_name)
-    else
-        type_name, nothing
-    end
-
-    decode_type = try
-        COL_TYPE_MAP[decode_type_name]
-    catch exc
-        if exc isa KeyError
-            error("Unsupported data type: $(decode_type_name)")
-        end
-        rethrow()
-    end
-
-    data = chread(sock, Vector{decode_type}, num_rows)
-
-    if type_name == "DateTime"
-        data = unix2datetime.(data)
-    elseif type_name == "Date"
-        data = convert(Array{Int64}, data)
-        data .*= SECS_IN_DAY
-        data = unix2datetime.(data)
-    elseif startswith(type_name, "Enum")
-        inv_map = Dict(v => k for (k, v) ∈ enum_def)
-        data = recode(data, inv_map...)
-    end
+    data = read_col_data(sock, num_rows, type_name)
 
     Column(name, type_name, data)
 end
@@ -300,33 +230,7 @@ function chwrite(sock::ClickHouseSock, x::Column)
     chwrite(sock, x.name)
     chwrite(sock, x.type)
 
-    data = if x.type == "DateTime"
-        d = datetime2unix.(x.data)
-        d = round.(d)
-        d = convert(Array{Int32}, d)
-    elseif x.type == "Date"
-        d = datetime2unix.(x.data)
-        d ./= convert(Float64, SECS_IN_DAY)
-        d = round.(d)
-        d = convert(Array{Int16}, d)
-    elseif startswith(x.type, "Enum")
-        ty, map = parse_enum_def(x.type)
-        # TODO: this could be faster for categorical arrays.
-        try
-            d = [map[x] for x ∈ x.data]
-        catch exc
-            if exc isa KeyError
-                error("Value is not a valid enum variant: $(exc.key)")
-            end
-            rethrow()
-        end
-        ty = COL_TYPE_MAP[ty]
-        convert(Array{ty}, d)
-    else
-        x.data
-    end
-
-    chwrite(sock, data)
+    write_col_data(sock, x.data, x.type)
 end
 
 struct Block

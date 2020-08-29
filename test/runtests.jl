@@ -213,7 +213,7 @@ end
         :lul => UInt64[42, 1337, 123],
         :oof => Float32[0., ℯ, π],
         :foo => String["aa", "bb", "cc"],
-        :ddd => DateTime[td, td, td],
+        :ddd => Date[td, td, td],
         :enu => ["a", "c", "foobar"],
     )
 
@@ -230,7 +230,7 @@ end
     @test proj[:lul] == UInt64[42, 1337, 123, 42]
     @test proj[:oof] == Float32[0., ℯ, π, 0.]
     @test proj[:foo] == String["aa", "bb", "cc", "aa"]
-    @test proj[:ddd] == DateTime[td, td, td, td]
+    @test proj[:ddd] == Date[td, td, td, td]
 
     # SELECT -> DF
     proj_df = select_df(sock, "SELECT * FROM $(table) LIMIT 3, 3")
