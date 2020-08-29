@@ -4,6 +4,8 @@ using ClickHouse: read_client_packet, read_server_packet
 using DataFrames
 using Dates
 
+include("columns_io.jl")
+
 @test begin
     sock = IOBuffer([0xC2, 0x0A]) |> ClickHouseSock
     ClickHouse.chread(sock, ClickHouse.VarUInt) == ClickHouse.VarUInt(0x542)
