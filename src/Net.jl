@@ -212,6 +212,9 @@ struct Column
     data::Any
 end
 
+Base.:(==)(a::Column, b::Column) =  a.name == b.name && a.type == b.type && a.data == b.data
+
+
 const COL_TYPE_MAP = Dict(
     # Unsigned
     "UInt8"    => UInt8,
