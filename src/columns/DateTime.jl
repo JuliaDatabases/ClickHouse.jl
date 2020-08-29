@@ -5,7 +5,7 @@ function read_col_data(sock::ClickHouseSock, num_rows::VarUInt, ::Val{:DateTime}
     return unix2datetime.(data)
 end
 
-function write_col_data(sock::ClickHouseSock, data::AbstractVector{DateTime}, ::Val{:DateTime}) where {N}
+function write_col_data(sock::ClickHouseSock, data::AbstractVector{DateTime}, ::Val{:DateTime})
     d = round.(Int32,
         datetime2unix.(data)
     )

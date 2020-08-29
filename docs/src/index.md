@@ -19,6 +19,9 @@ Usage examples can be found on the [usage page](@ref Usage).
 - UInt8, UInt16, UInt32, UInt64
 - Date, DateTime
 - Enum
+- UUID
+- FixedString(N)
+- Tuple
 
 All other types are currently not implemented. PRs welcome.
 

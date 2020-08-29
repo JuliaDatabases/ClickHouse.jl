@@ -3,6 +3,7 @@ using ClickHouse
 using ClickHouse: read_client_packet, read_server_packet
 using DataFrames
 using Dates
+using UUIDs
 
 include("columns_io.jl")
 
@@ -197,8 +198,10 @@ end
                 lul UInt64,
                 oof Float32,
                 foo String,
+                foo_fixed FixedString(5),
                 ddd Date,
-                enu Enum8('a' = 1, 'c' = 3, 'foobar' = 44, 'd' = 9)
+                enu Enum8('a' = 1, 'c' = 3, 'foobar' = 44, 'd' = 9),
+                uuid UUID
             )
             ENGINE = Memory
         """)
@@ -213,8 +216,10 @@ end
         :lul => UInt64[42, 1337, 123],
         :oof => Float32[0., ℯ, π],
         :foo => String["aa", "bb", "cc"],
+        :foo_fixed => String["aaaaa", "bbb", "cc"],
         :ddd => Date[td, td, td],
         :enu => ["a", "c", "foobar"],
+        :uuid => [uuid4(), uuid4(), uuid4()]
     )
 
     # Single block inserts.
@@ -230,8 +235,17 @@ end
     @test proj[:lul] == UInt64[42, 1337, 123, 42]
     @test proj[:oof] == Float32[0., ℯ, π, 0.]
     @test proj[:foo] == String["aa", "bb", "cc", "aa"]
+    @test proj[:foo_fixed] == String["aaaaa", "bbb  ", "cc   ", "aaaaa"]
     @test proj[:ddd] == Date[td, td, td, td]
+    @test proj[:uuid] == vcat(data[:uuid], data[:uuid][1:1])
 
+    # SELECT Tuple -> Dict
+
+    proj = ClickHouse.select(sock, "SELECT tuple(ddd, tuple(lul, foo)) as tup FROM $(table) LIMIT 2")
+    @test proj[:tup] == [
+        (td, (UInt64(42), "aa")),
+        (td, (UInt64(1337), "bb")),
+    ]
     # SELECT -> DF
     proj_df = select_df(sock, "SELECT * FROM $(table) LIMIT 3, 3")
     exp_df = DataFrame(data)
