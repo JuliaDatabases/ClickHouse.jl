@@ -7,6 +7,10 @@ using UUIDs
 
 include("columns_io.jl")
 
+function miss_or_equal(a, b)
+    return (ismissing(a) && ismissing(b)) ||
+            (a==b)
+end
 @test begin
     sock = IOBuffer([0xC2, 0x0A]) |> ClickHouseSock
     ClickHouse.chread(sock, ClickHouse.VarUInt) == ClickHouse.VarUInt(0x542)
@@ -201,7 +205,10 @@ end
                 foo_fixed FixedString(5),
                 ddd Date,
                 enu Enum8('a' = 1, 'c' = 3, 'foobar' = 44, 'd' = 9),
-                uuid UUID
+                uuid UUID,
+                nn Nullable(Int64),
+                ns Nullable(String),
+                ne Nullable(Enum16('a' = 1, 'b' = 2))
             )
             ENGINE = Memory
         """)
@@ -219,7 +226,10 @@ end
         :foo_fixed => String["aaaaa", "bbb", "cc"],
         :ddd => Date[td, td, td],
         :enu => ["a", "c", "foobar"],
-        :uuid => [uuid4(), uuid4(), uuid4()]
+        :uuid => [uuid4(), uuid4(), uuid4()],
+        :nn => [10, missing, 20],
+        :ns => [missing, "sst", "aaa"],
+        :ne => CategoricalVector(["a", "b", missing])
     )
 
     # Single block inserts.
@@ -230,6 +240,7 @@ end
     # Multi block insert.
     insert(sock, table, repeat([data], 100))
 
+
     # SELECT -> Dict
     proj = ClickHouse.select(sock, "SELECT * FROM $(table) LIMIT 4")
     @test proj[:lul] == UInt64[42, 1337, 123, 42]
@@ -238,6 +249,17 @@ end
     @test proj[:foo_fixed] == String["aaaaa", "bbb  ", "cc   ", "aaaaa"]
     @test proj[:ddd] == Date[td, td, td, td]
     @test proj[:uuid] == vcat(data[:uuid], data[:uuid][1:1])
+    @test all(
+        miss_or_equal.(proj[:nn], [10, missing, 20 , 10])
+    )
+
+    @test all(
+        miss_or_equal.(proj[:ns], [missing, "sst", "aaa" , missing])
+    )
+
+    @test all(
+        miss_or_equal.(proj[:ne], ["a", "b", missing, "a"])
+    )
 
     # SELECT Tuple -> Dict
 

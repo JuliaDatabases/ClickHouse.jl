@@ -38,6 +38,7 @@ using UUIDs
     @test r.args[2].name == :Tuple
     @test r.args[2].args[1].name == :Int32
     @test r.args[2].args[2].name == :Float32
+
 end
 
 @testset "Int columns" begin
@@ -181,5 +182,68 @@ end
     chwrite(sock, column)
     res = read_col(sock, VarUInt(nrows))
     @test res == column
+
+end
+
+@testset "Nullable columns" begin
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = rand(Int64, nrows)
+    data = convert(Vector{Union{Int64, Missing}}, data)
+    data[rand(1:nrows, 20)] .= missing
+    column = Column("test", "Nullable(Int64)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test all(zip(data, res.data)) do t
+        (a, b) = t
+        return (ismissing(a) && ismissing(b)) ||
+        (a == b)
+    end
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = rand(Float64, nrows)
+    data = convert(Vector{Union{Float64, Missing}}, data)
+    data[rand(1:nrows, 20)] .= missing
+    column = Column("test", "Nullable(Float64)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test all(zip(data, res.data)) do t
+        (a, b) = t
+        return (ismissing(a) && ismissing(b)) ||
+        (a ≈ b)
+    end
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = string.(rand(Int64, nrows))
+    data = convert(Vector{Union{String, Missing}}, data)
+    data[rand(1:nrows, 20)] .= missing
+    column = Column("test", "Nullable(String)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test all(zip(data, res.data)) do t
+        (a, b) = t
+        return (ismissing(a) && ismissing(b)) ||
+        (a == b)
+    end
+
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = CategoricalVector(rand(["a","b","c"], nrows))
+    data = convert(CategoricalVector{Union{String, Missing}}, data)
+    data[rand(1:nrows, 20)] .= missing
+
+    column = Column("test", "Nullable(Enum8('a'=1,'b'=3,'c'=10))", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+
+    @test all(zip(data, res.data)) do t
+        (a, b) = t
+        return (ismissing(a) && ismissing(b)) ||
+        (a == b)
+    end
 
 end

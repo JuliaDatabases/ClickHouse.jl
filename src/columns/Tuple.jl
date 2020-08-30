@@ -1,4 +1,5 @@
 is_ch_type(::Val{:Tuple})  = true
+can_be_nullable(::Val{Tuple}) = false
 
 function read_col_data(sock::ClickHouseSock, num_rows::VarUInt,
                          ::Val{:Tuple}, args::TypeAst...)
