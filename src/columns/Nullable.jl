@@ -20,9 +20,15 @@ function read_col_data(sock::ClickHouseSock, num_rows::VarUInt,
     return result
 end
 
-missing_replacement(::Type{T}) where {T <: Number} = T(0)
+missing_replacement(::Type{T}) where {T <: Number} = zero(T)
 missing_replacement(::Type{UUID}) = UUID(0)
+missing_replacement(::Type{Date}) = Date(1970)
+missing_replacement(::Type{DateTime}) = unix2datetime(0)
 missing_replacement(::Type{String}) = ""
+missing_replacement(::Type{Union{T, Missing}}) where {T} =
+            missing_replacement(T)
+
+
 uint8_ismissing(v)::UInt8 = ismissing(v) ? 1 : 0
 
 function write_col_data(sock::ClickHouseSock,

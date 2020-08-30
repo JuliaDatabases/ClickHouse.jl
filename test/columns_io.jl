@@ -51,6 +51,14 @@ end
     res = read_col(sock, VarUInt(nrows))
     @test res == column
 
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = rand(Int32, nrows)
+    column = Column("test", "Int64", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
 end
 
 @testset "String columns" begin
@@ -245,5 +253,76 @@ end
         return (ismissing(a) && ismissing(b)) ||
         (a == b)
     end
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = Date.(rand(2010:2020, nrows), rand(1:12, nrows), rand(1:20, nrows))
+    data = convert(Vector{Union{Date, Missing}}, data)
+    data[rand(1:nrows, 20)] .= missing
+    column = Column("test", "Nullable(Date)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test all(zip(data, res.data)) do t
+        (a, b) = t
+        return (ismissing(a) && ismissing(b)) ||
+        (a == b)
+    end
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = DateTime.(rand(2010:2020, nrows), rand(1:12, nrows), rand(1:20, nrows),
+    rand(0:23, nrows), rand(0:59, nrows), rand(0:59, nrows))
+    data = convert(Vector{Union{DateTime, Missing}}, data)
+    data[rand(1:nrows, 20)] .= missing
+    column = Column("test", "Nullable(DateTime)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test all(zip(data, res.data)) do t
+        (a, b) = t
+        return (ismissing(a) && ismissing(b)) ||
+        (a == b)
+    end
+end
+
+@testset "LowCardinality columns" begin
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 10
+    data = rand(1:10, nrows)
+    column = Column("test", "LowCardinality(Int64)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+
+    @test res.data == data
+
+    sock = ClickHouseSock(PipeBuffer())
+    data = rand(1:10, nrows)
+    data = convert(Vector{Union{Int64, Missing}}, data)
+    data[rand(1:nrows, 5)] .= missing
+    column = Column("test", "LowCardinality(Nullable(Int64))", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+
+    @test all(zip(data, res.data)) do t
+        (a, b) = t
+        return (ismissing(a) && ismissing(b)) ||
+        (a == b)
+    end
+
+    sock = ClickHouseSock(PipeBuffer())
+    data = rand(["a", "b", "c"], nrows)
+    column = Column("test", "LowCardinality(String)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+
+    @test res.data == data
+
+    sock = ClickHouseSock(PipeBuffer())
+    data = CategoricalVector(rand(["a","b","c"], nrows))
+
+    column = Column("test", "LowCardinality(Enum8('a'=1,'b'=3,'c'=10))", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res.data == data
 
 end
