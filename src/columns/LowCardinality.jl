@@ -42,7 +42,8 @@ function read_col_data(sock::ClickHouseSock, num_rows::VarUInt,
     is_nest_nullable = (nest.name == :Nullable)
     notnullable_nest = is_nest_nullable ? nest.args[1] : nest
 
-    chread(sock, UInt64) #KeysSerializationVersion
+    ver = chread(sock, UInt64) # KeysSerializationVersion
+    ver == 1 || error("unsupported LC serialization version: $(ver)")
 
     serialization_type = chread(sock, UInt64)
     int_type = serialization_type & 0xf
