@@ -2,6 +2,9 @@ is_ch_type(::Val{N})  where {N} = false
 is_ch_type(str::String)  = is_ch_type(Val(Symbol(str)))
 is_ch_type(s::Symbol)  = is_ch_type(Val(s))
 
+can_be_nullable(::Val{N}) where {N} = true
+can_be_nullable(s::Symbol) = can_be_nullable(Val(s))
+
 function read_col_data(sock::ClickHouseSock,
                         num_rows::VarUInt, ::Val{N}, args...) where {N}
     throw(

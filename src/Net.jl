@@ -222,7 +222,15 @@ function read_col(sock::ClickHouseSock, num_rows::VarUInt)::Column
     name = chread(sock, String)
     type_name = chread(sock, String)
 
-    data = read_col_data(sock, num_rows, parse_typestring(type_name))
+    data = try
+        read_col_data(sock, num_rows, parse_typestring(type_name))
+    catch e
+        if e isa ArgumentError
+            error("Error while reading col $(name) ($(type)): $(e.msg)")
+        else
+            rethrow(e)
+        end
+    end
     Column(name, type_name, data)
 end
 
@@ -230,7 +238,15 @@ function chwrite(sock::ClickHouseSock, x::Column)
     chwrite(sock, x.name)
     chwrite(sock, x.type)
 
-    write_col_data(sock, x.data, parse_typestring(x.type))
+    try
+        write_col_data(sock, x.data, parse_typestring(x.type))
+    catch e
+        if e isa ArgumentError
+            error("Error while writing col $(x.name) ($(x.type)): $(e.msg)")
+        else
+            rethrow(e)
+        end
+    end
 end
 
 struct Block

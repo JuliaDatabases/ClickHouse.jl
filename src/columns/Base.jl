@@ -17,6 +17,13 @@ macro _primitive_columns(args...)
                 return chwrite(sock, data)
             end
         end )
+        push!(funcs, quote
+            function write_col_data(sock::ClickHouseSock,
+                data::AbstractVector,
+                ::Val{Symbol($arg_string)})
+                return chwrite(sock, convert(Vector{$arg},data))
+            end
+        end )
         push!(funcs, quote deserialize(::Val{Symbol($arg_string)}) = $arg end )
     end
     return esc(:($(funcs...),))

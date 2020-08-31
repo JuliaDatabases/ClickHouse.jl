@@ -7,6 +7,10 @@ using UUIDs
 
 include("columns_io.jl")
 
+function miss_or_equal(a, b)
+    return (ismissing(a) && ismissing(b)) ||
+            (a==b)
+end
 @test begin
     sock = IOBuffer([0xC2, 0x0A]) |> ClickHouseSock
     ClickHouse.chread(sock, ClickHouse.VarUInt) == ClickHouse.VarUInt(0x542)
@@ -201,7 +205,12 @@ end
                 foo_fixed FixedString(5),
                 ddd Date,
                 enu Enum8('a' = 1, 'c' = 3, 'foobar' = 44, 'd' = 9),
-                uuid UUID
+                uuid UUID,
+                nn Nullable(Int64),
+                ns Nullable(String),
+                ne Nullable(Enum16('a' = 1, 'b' = 2)),
+                las LowCardinality(String),
+                lan LowCardinality(Nullable(String))
             )
             ENGINE = Memory
         """)
@@ -219,7 +228,18 @@ end
         :foo_fixed => String["aaaaa", "bbb", "cc"],
         :ddd => Date[td, td, td],
         :enu => ["a", "c", "foobar"],
-        :uuid => [uuid4(), uuid4(), uuid4()]
+        :uuid => [
+            UUID("c187abfa-31c1-4131-a33e-556f23f7aa67"),
+            UUID("f9a7e2b9-dc22-4ca6-b4fe-83ba551ea3bb"),
+            UUID("dc986a81-9f1d-4d96-b618-6e8d034285c1")
+             ],
+        :nn => [10, missing, 20],
+        :ns => [missing, "sst", "aaa"],
+        :ne => CategoricalVector(["a", "b", missing]),
+        :las => ["a", "b", "a"],
+        :lan => [missing, "b", "a"],
+
+
     )
 
     # Single block inserts.
@@ -238,6 +258,23 @@ end
     @test proj[:foo_fixed] == String["aaaaa", "bbb  ", "cc   ", "aaaaa"]
     @test proj[:ddd] == Date[td, td, td, td]
     @test proj[:uuid] == vcat(data[:uuid], data[:uuid][1:1])
+    @test all(
+        miss_or_equal.(proj[:nn], [10, missing, 20 , 10])
+    )
+
+    @test all(
+        miss_or_equal.(proj[:ns], [missing, "sst", "aaa" , missing])
+    )
+
+    @test all(
+        miss_or_equal.(proj[:ne], ["a", "b", missing, "a"])
+    )
+    @test proj[:las] == ["a", "b", "a", "a"]
+
+    @test all(
+        miss_or_equal.(proj[:lan], [missing, "b", "a",  missing])
+    )
+
 
     # SELECT Tuple -> Dict
 
