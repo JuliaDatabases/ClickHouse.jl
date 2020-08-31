@@ -35,12 +35,12 @@ end
 
 
 function read_col_data(sock::ClickHouseSock, num_rows::VarUInt,
-                                            ::Val{:LowCardinality}, nest::TypeAst)
+                                            ::Val{:LowCardinality}, nested::TypeAst)
 
-    UInt64(num_rows)  == 0 && return read_col_data(sock, num_rows, nest)
+    UInt64(num_rows)  == 0 && return read_col_data(sock, num_rows, nested)
 
-    is_nest_nullable = (nest.name == :Nullable)
-    notnullable_nest = is_nest_nullable ? nest.args[1] : nest
+    is_nested_nullable = (nested.name == :Nullable)
+    notnullable_nested = is_nested_nullable ? nested.args[1] : nested
 
     ver = chread(sock, UInt64) # KeysSerializationVersion
     ver == 1 || error("unsupported LC serialization version: $(ver)")
@@ -49,25 +49,25 @@ function read_col_data(sock::ClickHouseSock, num_rows::VarUInt,
     int_type = serialization_type & 0xf
 
     index_size = chread(sock, UInt64)
-    index = read_col_data(sock, VarUInt(index_size), notnullable_nest)
-    is_nest_nullable && (index = index[2:end])
+    index = read_col_data(sock, VarUInt(index_size), notnullable_nested)
+    is_nested_nullable && (index = index[2:end])
 
     keys_size = chread(sock, UInt64)
     keys = read_col_data(sock, VarUInt(keys_size), Val(lc_index_int_types[int_type + 1]))
 
-    (nest.name != :Nullable) && (keys .= keys .+ 1)
+    (nested.name != :Nullable) && (keys .= keys .+ 1)
 
 
-    return make_result(index, keys, nest.name == :Nullable)
+    return make_result(index, keys, nested.name == :Nullable)
 end
 
 
 function write_col_data(sock::ClickHouseSock,
                                 data::AbstractCategoricalVector{T},
-                                ::Val{:LowCardinality}, nest::TypeAst) where {T}
+                                ::Val{:LowCardinality}, nested::TypeAst) where {T}
 
-    is_nest_nullable = (nest.name == :Nullable)
-    notnullable_nest = is_nest_nullable ? nest.args[1] : nest
+    is_nested_nullable = (nested.name == :Nullable)
+    notnullable_nested = is_nested_nullable ? nested.args[1] : nested
 
     # KeysSerializationVersion. See ClickHouse docs.
     chwrite(sock, Int64(1))
@@ -78,23 +78,23 @@ function write_col_data(sock::ClickHouseSock,
     serialization_type = lc_serialization_type | int_type
     chwrite(sock, serialization_type)
 
-    index = is_nest_nullable ?
+    index = is_nested_nullable ?
                     vcat(missing_replacement(T), levels(data)) :
                     levels(data)
 
     chwrite(sock, length(index))
-    write_col_data(sock, index, notnullable_nest)
+    write_col_data(sock, index, notnullable_nested)
 
     chwrite(sock, length(data))
 
-    #In c++ indexes started from 0, in case of nullable nest 0 means null and
-    # it's ok, but if nest not nullable we must sub 1 from index
-    keys = is_nest_nullable ? data.refs : data.refs .- 1
+    #In c++ indexes started from 0, in case of nullable nested 0 means null and
+    # it's ok, but if nested not nullable we must sub 1 from index
+    keys = is_nested_nullable ? data.refs : data.refs .- 1
     write_col_data(sock, keys, Val(lc_index_int_types[int_type + 1]))
 end
 
 function write_col_data(sock::ClickHouseSock,
                                 data::AbstractVector{T},
-                                v::Val{:LowCardinality}, nest::TypeAst) where {T}
-    write_col_data(sock, CategoricalVector{T}(data), v, nest)
+                                v::Val{:LowCardinality}, nested::TypeAst) where {T}
+    write_col_data(sock, CategoricalVector{T}(data), v, nested)
 end
