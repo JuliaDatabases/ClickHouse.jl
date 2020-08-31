@@ -2,6 +2,13 @@ using UUIDs
 is_ch_type(::Val{:Nullable})  = true
 can_be_nullable(::Val{:Nullable}) = false
 
+missings_vector_type(::Type{Vector{T}}) where {T} =
+                                                 Vector{Union{T, Missing}}
+missings_vector_type(::Type{CategoricalVector{T}}) where {T} =
+                                                CategoricalVector{Union{T, Missing}}
+
+result_type(::Val{:Nullable}, nested)  = missings_vector_type(result_type(nested))
+
 convert_to_missings(data::Vector{T}) where {T} =
                                  convert(Vector{Union{T, Missing}}, data)
 
