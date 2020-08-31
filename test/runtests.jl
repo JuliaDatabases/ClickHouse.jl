@@ -5,7 +5,18 @@ using DataFrames
 using Dates
 using UUIDs
 
-include("columns_io.jl")
+function recursive_miss_cmp(a::AbstractVector,b::AbstractVector)
+    length(a) != length(b) && return false
+    for i in 1:length(a)
+        (!recursive_miss_cmp(a[i], b[i])) && return false
+    end
+    return true
+end
+function recursive_miss_cmp(a,b)
+    return (ismissing(a) && ismissing(b)) ||
+        (!ismissing(a == b) && a==b)
+end
+#include("columns_io.jl")
 
 function miss_or_equal(a, b)
     return (ismissing(a) && ismissing(b)) ||
@@ -210,7 +221,10 @@ end
                 ns Nullable(String),
                 ne Nullable(Enum16('a' = 1, 'b' = 2)),
                 las LowCardinality(String),
-                lan LowCardinality(Nullable(String))
+                lan LowCardinality(Nullable(String)),
+                arrs Array(String),
+                arrsn Array(Array(Int64)),
+                arrsnn Array(Array(Nullable(Int64)))
             )
             ENGINE = Memory
         """)
@@ -219,7 +233,7 @@ end
         occursin(r"Table .* already exists", exc.exc.message) || rethrow()
         sock = connect()
     end
-
+    NullInt = Union{Int64, Missing}
     td = today()
     data = Dict(
         :lul => UInt64[42, 1337, 123],
@@ -238,6 +252,21 @@ end
         :ne => CategoricalVector(["a", "b", missing]),
         :las => ["a", "b", "a"],
         :lan => [missing, "b", "a"],
+        :arrs => [
+            ["a", "b"],
+            ["a"],
+            ["v", "b"]
+             ],
+        :arrsn => [
+            [[1,2], [3,4]],
+            [[5,6],[7]],
+            [[1], [2]]
+            ],
+        :arrsnn => [
+            [NullInt[1,2], NullInt[3,4]],
+            [NullInt[5,6],NullInt[7]],
+            [NullInt[1], NullInt[missing]]
+            ],
 
 
     )
@@ -258,23 +287,37 @@ end
     @test proj[:foo_fixed] == String["aaaaa", "bbb  ", "cc   ", "aaaaa"]
     @test proj[:ddd] == Date[td, td, td, td]
     @test proj[:uuid] == vcat(data[:uuid], data[:uuid][1:1])
-    @test all(
-        miss_or_equal.(proj[:nn], [10, missing, 20 , 10])
-    )
+    @test recursive_miss_cmp(proj[:nn], [10, missing, 20 , 10])
+    @test recursive_miss_cmp(proj[:ns], [missing, "sst", "aaa" , missing])
+    @test recursive_miss_cmp(proj[:ne], ["a", "b", missing, "a"])
 
-    @test all(
-        miss_or_equal.(proj[:ns], [missing, "sst", "aaa" , missing])
-    )
 
-    @test all(
-        miss_or_equal.(proj[:ne], ["a", "b", missing, "a"])
-    )
     @test proj[:las] == ["a", "b", "a", "a"]
 
-    @test all(
-        miss_or_equal.(proj[:lan], [missing, "b", "a",  missing])
-    )
+    @test recursive_miss_cmp(proj[:lan], [missing, "b", "a",  missing])
 
+    @test proj[:arrsn] == [
+        [[1,2], [3,4]],
+        [[5,6],[7]],
+        [[1], [2]],
+        [[1,2], [3,4]],
+    ]
+
+    @test proj[:arrs] == [
+        ["a", "b"],
+        ["a"],
+        ["v", "b"],
+        ["a", "b"],
+    ]
+
+    @test recursive_miss_cmp(proj[:arrsnn],
+        [
+            [NullInt[1,2], NullInt[3,4]],
+            [NullInt[5,6],NullInt[7]],
+            [NullInt[1], NullInt[missing]],
+            [NullInt[1,2], NullInt[3,4]],
+        ]
+    )
 
     # SELECT Tuple -> Dict
 

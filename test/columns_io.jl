@@ -3,6 +3,7 @@ using Dates
 using CategoricalArrays
 using UUIDs
 
+
 @testset "Parse type" begin
     r = parse_typestring("Int32")
     @test r.name == :Int32
@@ -325,4 +326,60 @@ end
     res = read_col(sock, VarUInt(nrows))
     @test res.data == data
 
+end
+
+@testset "Array collumns" begin
+
+    nrows = 1000
+    sock = ClickHouseSock(PipeBuffer())
+    data = rand([[[1,2],[3]], [[3],[4,5]], [[6],[7,8]]], nrows)
+    column = Column("test", "Array(Array(Int64))", data)
+    chwrite(sock, column)
+
+    res = read_col(sock, VarUInt(nrows))
+    @test res.data == data
+
+    sock = ClickHouseSock(PipeBuffer())
+    data = rand([
+        ["ab", "bc", "cd"],
+        ["ab", "ed", "ab"]
+    ], nrows)
+    column = Column("test", "Array(String)", data)
+    chwrite(sock, column)
+
+    res = read_col(sock, VarUInt(nrows))
+    @test res.data == data
+
+    sock = ClickHouseSock(PipeBuffer())
+    data = rand([
+        ["ab", "bc", "cd"],
+        ["ab", "ed", "ab"]
+    ], nrows)
+    column = Column("test", "Array(LowCardinality(String))", data)
+    chwrite(sock, column)
+
+    res = read_col(sock, VarUInt(nrows))
+    @test res.data == data
+    sock = ClickHouseSock(PipeBuffer())
+    data = rand([
+        [["ab"], [missing, "cd"]],
+        [["ab", "ac"], [missing, "ab"]]
+    ], nrows)
+    sock = ClickHouseSock(PipeBuffer())
+    column = Column("test", "Array(Array(Nullable(String)))", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test string(data) == string(res.data)
+    @test recursive_miss_cmp(data, res.data)
+
+    sock = ClickHouseSock(PipeBuffer())
+    data = rand([
+        [["ab"], [missing, "cd"]],
+        [["ab", "ac"], [missing, "ab"]]
+    ], nrows)
+    sock = ClickHouseSock(PipeBuffer())
+    column = Column("test", "Array(Array(LowCardinality(Nullable(String))))", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test recursive_miss_cmp(data, res.data)
 end
