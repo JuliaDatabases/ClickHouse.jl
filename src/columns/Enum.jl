@@ -1,5 +1,7 @@
 is_ch_type(::Val{:Enum8})  = true
 is_ch_type(::Val{:Enum16})  = true
+result_type(::Val{:Enum8}, args...)  = CategoricalVector{String}
+result_type(::Val{:Enum16}, args...)  = CategoricalVector{String}
 
 const ENUM_RE_ARG = r"""
 

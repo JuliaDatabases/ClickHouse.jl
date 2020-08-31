@@ -16,7 +16,7 @@ function recursive_miss_cmp(a,b)
     return (ismissing(a) && ismissing(b)) ||
         (!ismissing(a == b) && a==b)
 end
-#include("columns_io.jl")
+include("columns_io.jl")
 
 function miss_or_equal(a, b)
     return (ismissing(a) && ismissing(b)) ||
@@ -222,7 +222,7 @@ end
                 ne Nullable(Enum16('a' = 1, 'b' = 2)),
                 las LowCardinality(String),
                 lan LowCardinality(Nullable(String)),
-                arrs Array(String),
+                arrs Array(LowCardinality(String)),
                 arrsn Array(Array(Int64)),
                 arrsnn Array(Array(Nullable(Int64)))
             )

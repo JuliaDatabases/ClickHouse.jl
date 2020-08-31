@@ -14,6 +14,24 @@ const lc_serialization_type = lc_has_additional_keys_bit | lc_need_update_dictio
 
 const lc_index_int_types = [:UInt8, :UInt16, :UInt32, :UInt64]
 
+categorical_vector_type(::Type{Vector{T}}) where {T} =
+                                                 CategoricalVector{T}
+categorical_vector_type(::Type{CategoricalVector{T}}) where {T} =
+                                                CategoricalVector{T}
+
+result_type(::Val{:LowCardinality}, nested)  =
+                             categorical_vector_type(result_type(nested))
+
+function read_state_prefix(sock::ClickHouseSock, ::Val{:LowCardinality}, nested::TypeAst)
+    ver = chread(sock, UInt64) # KeysSerializationVersion
+    ver == 1 || error("unsupported LC serialization version: $(ver)")
+    return ver
+end
+
+function write_state_prefix(sock::ClickHouseSock, ::Val{:LowCardinality}, nested::TypeAst)
+    # KeysSerializationVersion. See ClickHouse docs.
+    chwrite(sock, Int64(1))
+end
 
 function make_result(index::Vector{T}, keys, is_nullable) where {T}
 
@@ -42,9 +60,6 @@ function read_col_data(sock::ClickHouseSock, num_rows::VarUInt,
     is_nested_nullable = (nested.name == :Nullable)
     notnullable_nested = is_nested_nullable ? nested.args[1] : nested
 
-    ver = chread(sock, UInt64) # KeysSerializationVersion
-    ver == 1 || error("unsupported LC serialization version: $(ver)")
-
     serialization_type = chread(sock, UInt64)
     int_type = serialization_type & 0xf
 
@@ -70,8 +85,6 @@ function write_col_data(sock::ClickHouseSock,
     is_nested_nullable = (nested.name == :Nullable)
     notnullable_nested = is_nested_nullable ? nested.args[1] : nested
 
-    # KeysSerializationVersion. See ClickHouse docs.
-    chwrite(sock, Int64(1))
     isempty(data) && return
 
     int_type = floor(Int, log2(length(levels(data))) / 2)

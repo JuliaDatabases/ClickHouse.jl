@@ -1,4 +1,5 @@
-using ClickHouse: Column, chwrite, chread, read_col, VarUInt, parse_typestring
+using ClickHouse: Column, chwrite, chread,
+         read_col, VarUInt, parse_typestring, result_type
 using Dates
 using CategoricalArrays
 using UUIDs
@@ -11,6 +12,7 @@ using UUIDs
 
     r = parse_typestring("   String  ")
     @test r.name == :String
+    @test result_type(r) == Vector{String}
 
     r = parse_typestring("   Enum8('a' = 10, 'b'=1, 'addd' = 45)  ")
 
@@ -19,6 +21,7 @@ using UUIDs
     @test r.args[1] == "'a' = 10"
     @test r.args[2] == "'b'=1"
     @test r.args[3] == "'addd' = 45"
+    @test result_type(r) == CategoricalVector{String}
 
     r = parse_typestring(" FixedString(4)")
     @test r.name == :FixedString
@@ -26,11 +29,13 @@ using UUIDs
     r = parse_typestring(" FixedString(44)")
     @test r.name == :FixedString
     @test r.args[1] == "44"
+    @test result_type(r) == Vector{String}
 
     r = parse_typestring("Tuple(Int64, String)")
     @test r.name == :Tuple
     @test r.args[1].name == :Int64
     @test r.args[2].name == :String
+    @test result_type(r) == Vector{Tuple{Int64, String}}
 
     r = parse_typestring("Tuple(Enum16('a' = 10), Tuple(Int32, Float32))")
     @test r.name == :Tuple
@@ -39,6 +44,22 @@ using UUIDs
     @test r.args[2].name == :Tuple
     @test r.args[2].args[1].name == :Int32
     @test r.args[2].args[2].name == :Float32
+    @test result_type(r) == Vector{
+        Tuple{
+            CategoricalValue{String},
+            Tuple{Int32, Float32}
+            }
+        }
+
+    r = parse_typestring("LowCardinality(String)")
+    @test result_type(r) == CategoricalVector{String}
+
+    r = parse_typestring("Array(Array(Nullable(Int32)))")
+    @test result_type(r) == Vector{
+        Vector{
+            Vector{Union{Missing, Int32}}
+        }
+    }
 
 end
 
