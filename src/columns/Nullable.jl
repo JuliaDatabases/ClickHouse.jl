@@ -70,6 +70,8 @@ function write_col_data(sock::ClickHouseSock,
         convert(CategoricalVector{T}, data)
     else
         tmp = deepcopy(data)
+        #replace missing (it's always 0 in refs of CategorialVector)
+        #with something valid
         replace!(tmp.refs, 0=>1)
         convert(CategoricalVector{T}, tmp)
     end
