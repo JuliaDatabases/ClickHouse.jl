@@ -22,6 +22,9 @@ Usage examples can be found on the [usage page](@ref Usage).
 - UUID
 - FixedString(N)
 - Tuple
+- LowCardinality(T)
+- Nullable(T)
+- Array(T)
 
 All other types are currently not implemented. PRs welcome.
 
