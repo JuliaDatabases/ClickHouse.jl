@@ -1,4 +1,3 @@
-import DataStructures: Queue
 is_ch_type(::Val{:Array})  = true
 can_be_nullable(::Val{:Array}) = false
 result_type(::Val{:Array}, nested::TypeAst) = Vector{result_type(nested)}
