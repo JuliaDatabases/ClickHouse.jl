@@ -62,6 +62,7 @@ function read_col_data(sock::ClickHouseSock, num_rows::VarUInt,
 end
 
 
+unmissing_type(::Type{Union{Missing, T}}) where {T} = T
 function write_col_data(sock::ClickHouseSock,
                                 data::AbstractCategoricalVector{T},
                                 ::Val{:LowCardinality}, nested::TypeAst) where {T}
@@ -79,7 +80,7 @@ function write_col_data(sock::ClickHouseSock,
     chwrite(sock, serialization_type)
 
     index = is_nested_nullable ?
-                    vcat(missing_replacement(T), levels(data)) :
+                    vcat(missing_replacement(unmissing_type(T)), levels(data)) :
                     levels(data)
 
     chwrite(sock, length(index))

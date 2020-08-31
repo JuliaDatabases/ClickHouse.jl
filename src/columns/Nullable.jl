@@ -25,8 +25,6 @@ missing_replacement(::Type{UUID}) = UUID(0)
 missing_replacement(::Type{Date}) = Date(1970)
 missing_replacement(::Type{DateTime}) = unix2datetime(0)
 missing_replacement(::Type{String}) = ""
-missing_replacement(::Type{Union{T, Missing}}) where {T} =
-            missing_replacement(T)
 
 
 uint8_ismissing(v)::UInt8 = ismissing(v) ? 1 : 0
