@@ -81,7 +81,7 @@ function read_col_data(sock::ClickHouseSock, num_rows::VarUInt,
 end
 
 const PossibleVectors{T} =
-     Union{<:AbstractVector{T}, <:AbstractCategoricalVector{T}} where {T}
+     Union{<:AbstractVector{T}, <:AbstractCategoricalVector{T}}
 function get_base_type(
         ::Type{<:AbstractVector{T}},
         nest ::TypeAst
