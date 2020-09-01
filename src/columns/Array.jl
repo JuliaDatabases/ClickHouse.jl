@@ -83,9 +83,9 @@ end
 const PossibleVectors{T} =
      Union{<:AbstractVector{T}, <:AbstractCategoricalVector{T}}
 function get_base_type(
-        ::Type{<:AbstractVector{T}},
-        nest ::TypeAst
-        ) where {T}
+    ::Type{<:AbstractVector{T}},
+    nest ::TypeAst,
+) where {T}
     nest.name == :Array && return get_base_type(T, nest.args[1])
     return (T, nest)
 end
