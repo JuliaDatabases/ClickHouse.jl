@@ -6,7 +6,7 @@ can_be_nullable(::Val{N}) where {N} = true
 can_be_nullable(s::Symbol) = can_be_nullable(Val(s))
 
 result_type(::Val{N}, args...)  where {N} =
-    string("Unsupported type ", N, " with arguments: ", args...)
+    error("Unsupported type ", N, " with arguments: ", args...)
 
 result_type(ast::TypeAst) =
                 result_type(Val(ast.name), ast.args...)
