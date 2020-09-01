@@ -326,6 +326,11 @@ end
         (td, (UInt64(42), "aa")),
         (td, (UInt64(1337), "bb")),
     ]
+
+    proj = ClickHouse.select(sock, "SELECT null as n, array() as arr FROM $(table) LIMIT 3")
+    @test all(ismissing.(proj[:n]))
+    @test all(proj[:arr] .== Ref(Missing[]))
+
     # SELECT -> DF
     proj_df = select_df(sock, "SELECT * FROM $(table) LIMIT 3, 3")
     exp_df = DataFrame(data)

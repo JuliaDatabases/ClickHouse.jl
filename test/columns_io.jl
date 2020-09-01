@@ -404,3 +404,19 @@ end
     res = read_col(sock, VarUInt(nrows))
     @test recursive_miss_cmp(data, res.data)
 end
+
+@testset "Nothing column" begin
+    sock = ClickHouseSock(PipeBuffer())
+    data = [missing, missing, missing, missing]
+    column = Column("test", "Nullable(Nothing)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(4))
+    @test all(ismissing.(data))
+
+    sock = ClickHouseSock(PipeBuffer())
+    data = [[], [], [], []]
+    column = Column("test", "Array(Nothing)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(4))
+    @test all(data .== Ref(Missing[]))
+end
