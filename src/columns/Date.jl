@@ -1,4 +1,5 @@
 is_ch_type(::Val{:Date})  = true
+result_type(::Val{:Date})  = Vector{Date}
 
 function read_col_data(sock::ClickHouseSock, num_rows::VarUInt, ::Val{:Date})
     data = chread(sock, Vector{UInt16}, num_rows)

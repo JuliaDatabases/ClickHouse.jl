@@ -3,6 +3,8 @@ macro _primitive_columns(args...)
     for arg in args
         arg_string = string(arg)
         push!(funcs, quote is_ch_type(::Val{Symbol($arg_string)}) = true end)
+        push!(funcs, quote result_type(::Val{Symbol($arg_string)}) =
+                                                            Vector{$arg} end)
         push!(funcs, quote
             function read_col_data(sock::ClickHouseSock,
                      num_rows::VarUInt,

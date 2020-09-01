@@ -1,4 +1,5 @@
 is_ch_type(::Val{:FixedString})  = true
+result_type(::Val{:FixedString}, len_str::String)  = Vector{String}
 
 function read_col_data(sock::ClickHouseSock, num_rows::VarUInt,
                         ::Val{:FixedString}, len_str::String)
