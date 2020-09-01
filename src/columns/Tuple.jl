@@ -4,11 +4,7 @@ can_be_nullable(::Val{Tuple}) = false
 remove_vector_type(::Type{Vector{T}}) where {T} = T
 remove_vector_type(::Type{CategoricalVector{T}}) where {T} = CategoricalValue{T}
 result_type(::Val{:Tuple}, args::TypeAst...) =
-                        Vector{
-                            Tuple{
-                                remove_vector_type.(result_type.(args))...
-                                }
-                            }
+    Vector{Tuple{remove_vector_type.(result_type.(args))...}}
 
 function read_col_data(sock::ClickHouseSock, num_rows::VarUInt,
                          ::Val{:Tuple}, args::TypeAst...)
