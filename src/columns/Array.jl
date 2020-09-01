@@ -18,7 +18,7 @@ result_type(::Val{:Array}, nested::TypeAst) = Vector{result_type(nested)}
     2) size of array 1 in depth=1: 2
     3) size of array 2 plus size of all array before in depth=1: 2 + 2 = 4
 
-    After sizes info com
+    After sizes info comes flatten data: 3 -> 4 -> 5 -> 6
 """
 
 read_state_prefix(sock::ClickHouseSock, ::Val{:Array}, nested::TypeAst) =
