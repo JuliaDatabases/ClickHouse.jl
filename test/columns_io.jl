@@ -3,7 +3,8 @@ using ClickHouse: Column, chwrite, chread,
 using Dates
 using CategoricalArrays
 using UUIDs
-
+import Sockets
+using Sockets: IPv4, IPv6
 
 @testset "Parse type" begin
     r = parse_typestring("Int32")
@@ -64,6 +65,26 @@ using UUIDs
 end
 
 @testset "Int columns" begin
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = Sockets.IPv4.(rand(UInt32, nrows))
+    column = Column("test", "IPv4", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = Sockets.IPv6.(rand(UInt128, nrows))
+    column = Column("test", "IPv6", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
+end
+
+@testset "IP columns" begin
 
     sock = ClickHouseSock(PipeBuffer())
     nrows = 100

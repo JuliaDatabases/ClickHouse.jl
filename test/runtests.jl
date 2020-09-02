@@ -225,7 +225,9 @@ end
                 arrs Array(LowCardinality(String)),
                 arrsn Array(Array(Int64)),
                 arrsnn Array(Array(Nullable(Int64))),
-                safunc SimpleAggregateFunction(sum, Int64)
+                safunc SimpleAggregateFunction(sum, Int64),
+                ip4 Nullable(IPv4),
+                ip6 Nullable(IPv6)
             )
             ENGINE = Memory
         """)
@@ -269,6 +271,12 @@ end
             [NullInt[1], NullInt[missing]]
             ],
         :safunc => Int64[42, 1337, 123],
+        :ip4 => [IPv4("127.0.0.2"), missing, IPv4("127.0.0.1")],
+        :ip6 => [
+            IPv6("2a02:aa08:e000:3100::2"),
+            missing,
+            IPv6("2a02:aa08:e000:3100::3")
+        ],
 
 
     )
@@ -322,6 +330,20 @@ end
     )
 
     @test proj[:safunc] == Int64[42, 1337, 123, 42]
+
+    @test recursive_miss_cmp(proj[:ip4], [
+        IPv4("127.0.0.2"),
+        missing,
+        IPv4("127.0.0.1"),
+        IPv4("127.0.0.2")
+        ])
+    @test recursive_miss_cmp(proj[:ip6], [
+        IPv6("2a02:aa08:e000:3100::2"),
+        missing,
+        IPv6("2a02:aa08:e000:3100::3"),
+        IPv6("2a02:aa08:e000:3100::2")
+    ])
+
 
     # SELECT Tuple -> Dict
 

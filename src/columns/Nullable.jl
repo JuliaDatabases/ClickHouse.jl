@@ -1,4 +1,5 @@
 using UUIDs
+import Sockets
 is_ch_type(::Val{:Nullable})  = true
 can_be_nullable(::Val{:Nullable}) = false
 
@@ -32,7 +33,8 @@ missing_replacement(::Type{UUID}) = UUID(0)
 missing_replacement(::Type{Date}) = Date(1970)
 missing_replacement(::Type{DateTime}) = unix2datetime(0)
 missing_replacement(::Type{String}) = ""
-
+missing_replacement(::Type{Sockets.IPv4}) = Sockets.IPv4(0)
+missing_replacement(::Type{Sockets.IPv6}) = Sockets.IPv6(0)
 
 
 uint8_ismissing(v)::UInt8 = ismissing(v) ? 1 : 0
