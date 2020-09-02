@@ -420,3 +420,23 @@ end
     res = read_col(sock, VarUInt(4))
     @test all(data .== Ref(Missing[]))
 end
+
+@testset "Int columns" begin
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = rand(Int64, nrows)
+    column = Column("test", "SimpleAggregateFunction(sum, Int64)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = rand(Int32, nrows)
+    column = Column("test", "Int64", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
+end

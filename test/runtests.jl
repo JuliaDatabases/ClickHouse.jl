@@ -224,7 +224,8 @@ end
                 lan LowCardinality(Nullable(String)),
                 arrs Array(LowCardinality(String)),
                 arrsn Array(Array(Int64)),
-                arrsnn Array(Array(Nullable(Int64)))
+                arrsnn Array(Array(Nullable(Int64))),
+                safunc SimpleAggregateFunction(sum, Int64)
             )
             ENGINE = Memory
         """)
@@ -267,6 +268,7 @@ end
             [NullInt[5,6],NullInt[7]],
             [NullInt[1], NullInt[missing]]
             ],
+        :safunc => Int64[42, 1337, 123],
 
 
     )
@@ -318,6 +320,8 @@ end
             [NullInt[1,2], NullInt[3,4]],
         ]
     )
+
+    @test proj[:safunc] == Int64[42, 1337, 123, 42]
 
     # SELECT Tuple -> Dict
 
