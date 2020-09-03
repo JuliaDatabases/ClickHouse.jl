@@ -166,6 +166,51 @@ end
 
 end
 
+@testset "DateTime64 columns" begin
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = DateTime.(rand(2010:2020, nrows), rand(1:12, nrows), rand(1:20, nrows),
+    rand(0:23, nrows), rand(0:59, nrows), rand(0:59, nrows))
+    column = Column("test", "DateTime64(0)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = DateTime.(rand(2010:2020, nrows), rand(1:12, nrows), rand(1:20, nrows),
+    rand(0:23, nrows), rand(0:59, nrows), rand(0:59, nrows))
+    column = Column("test", "DateTime64(2)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = DateTime.(rand(2010:2020, nrows), rand(1:12, nrows), rand(1:20, nrows),
+    rand(0:23, nrows), rand(0:59, nrows), rand(0:59, nrows),
+    rand(1:999))
+    column = Column("test", "DateTime64(3)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = DateTime.(rand(2010:2020, nrows), rand(1:12, nrows), rand(1:20, nrows),
+    rand(0:23, nrows), rand(0:59, nrows), rand(0:59, nrows),
+    rand(1:999))
+    column = Column("test", "DateTime64(6)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
+end
+
+
+
+
 @testset "Enum columns" begin
 
     sock = ClickHouseSock(PipeBuffer())

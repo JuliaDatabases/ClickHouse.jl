@@ -227,7 +227,9 @@ end
                 arrsnn Array(Array(Nullable(Int64))),
                 safunc SimpleAggregateFunction(sum, Int64),
                 ip4 Nullable(IPv4),
-                ip6 Nullable(IPv6)
+                ip6 Nullable(IPv6),
+                dt64 DateTime64(6),
+                dt64_1 DateTime64(1)
             )
             ENGINE = Memory
         """)
@@ -277,6 +279,16 @@ end
             missing,
             IPv6("2a02:aa08:e000:3100::3")
         ],
+        :dt64 => [
+            DateTime(2020, 02, 02, 10, 5, 10, 320),
+            DateTime(2020, 02, 02, 10, 5, 10, 322),
+            DateTime(2020, 02, 02, 10, 5, 10, 323)
+        ],
+        :dt64_1 => [
+            DateTime(2020, 02, 02, 10, 5, 10, 320),
+            DateTime(2020, 02, 02, 10, 5, 10, 422),
+            DateTime(2020, 02, 02, 10, 5, 10, 523)
+        ]
 
 
     )
@@ -344,6 +356,19 @@ end
         IPv6("2a02:aa08:e000:3100::2")
     ])
 
+    @test proj[:dt64] ==  [
+        DateTime(2020, 02, 02, 10, 5, 10, 320),
+        DateTime(2020, 02, 02, 10, 5, 10, 322),
+        DateTime(2020, 02, 02, 10, 5, 10, 323),
+        DateTime(2020, 02, 02, 10, 5, 10, 320)
+    ]
+
+    @test proj[:dt64_1] == [
+            DateTime(2020, 02, 02, 10, 5, 10, 300),
+            DateTime(2020, 02, 02, 10, 5, 10, 400),
+            DateTime(2020, 02, 02, 10, 5, 10, 500),
+            DateTime(2020, 02, 02, 10, 5, 10, 300),
+        ]
 
     # SELECT Tuple -> Dict
 
