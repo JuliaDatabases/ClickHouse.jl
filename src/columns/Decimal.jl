@@ -8,7 +8,7 @@ result_type(::Val{:Decimal32}, scale)  = Vector{Dec32}
 result_type(::Val{:Decimal64}, scale)  = Vector{Dec64}
 result_type(::Val{:Decimal128}, scale)  = Vector{Dec128}
 
-function dec_type_by_preciosion(precision_str::String)
+function dec_type_by_precision(precision_str::String)
     precision = parse(Int, precision_str)
 
     precision in 1:9 && return :Decimal32
@@ -18,7 +18,7 @@ function dec_type_by_preciosion(precision_str::String)
 end
 function result_type(::Val{:Decimal}, precision_str, scale)
     return result_type(
-            Val(dec_type_by_preciosion(precision_str)),
+            Val(dec_type_by_precision(precision_str)),
             scale
         )
 end
@@ -63,7 +63,7 @@ end
 function read_col_data(sock::ClickHouseSock, num_rows::VarUInt,
     ::Val{:Decimal}, precision_str,  scale_str)
     return read_col_data(sock, num_rows,
-    Val(dec_type_by_preciosion(precision_str)) ,scale_str)
+    Val(dec_type_by_precision(precision_str)) ,scale_str)
 end
 
 
@@ -89,5 +89,5 @@ end
 function write_col_data(sock::ClickHouseSock, data,
     ::Val{:Decimal}, precision_str,  scale_str)
     return write_col_data(sock, data,
-    Val(dec_type_by_preciosion(precision_str)) ,scale_str)
+    Val(dec_type_by_precision(precision_str)) ,scale_str)
 end

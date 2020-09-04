@@ -329,8 +329,8 @@ end
 
     sock = ClickHouseSock(PipeBuffer())
     nrows = 100
-    data = CategoricalVector(rand(["a","b","c"], nrows))
-    data = convert(CategoricalVector{Union{String, Missing}}, data)
+    data = CategoricalVector(rand(["a","b","c", missing], nrows))
+
     data[rand(1:nrows, 20)] .= missing
 
     column = Column("test", "Nullable(Enum8('a'=1,'b'=3,'c'=10))", data)
