@@ -5,6 +5,7 @@ using CategoricalArrays
 using UUIDs
 import Sockets
 using Sockets: IPv4, IPv6
+using DecFP
 
 @testset "Parse type" begin
     r = parse_typestring("Int32")
@@ -501,6 +502,52 @@ end
     nrows = 100
     data = rand(Int32, nrows)
     column = Column("test", "Int64", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
+end
+
+
+@testset "Decimal columns" begin
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = Dec32.(rand(1000:9999, nrows), -3)
+    column = Column("test", "Decimal32(3)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
+    sock = ClickHouseSock(PipeBuffer())
+    column = Column("test", "Decimal(4,3)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = Dec64.(rand(1000000000:9999999999, nrows), -4)
+    column = Column("test", "Decimal64(4)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
+    sock = ClickHouseSock(PipeBuffer())
+    column = Column("test", "Decimal(10,4)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = Dec128.(rand(Int128(10)^20:(Int128(10)^21 - 1), nrows), -14)
+    column = Column("test", "Decimal128(14)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
+    sock = ClickHouseSock(PipeBuffer())
+    column = Column("test", "Decimal(20,14)", data)
     chwrite(sock, column)
     res = read_col(sock, VarUInt(nrows))
     @test res == column
