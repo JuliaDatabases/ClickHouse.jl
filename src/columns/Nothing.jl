@@ -10,7 +10,6 @@ end
 function write_col_data(sock::ClickHouseSock,
                                 data::T,
                                 ::Val{:Nothing}) where {T}
-    tmp = Vector{UInt8}(undef, length(data))
-    fill!(tmp, UInt8(0))
-    chwrite(sock, tmp)
+
+    chwrite(sock, zeros(UInt8, length(data)))
 end
