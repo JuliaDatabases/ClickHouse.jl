@@ -4,6 +4,7 @@ using ClickHouse: read_client_packet, read_server_packet
 using DataFrames
 using Dates
 using UUIDs
+using DecFP
 
 function recursive_miss_cmp(a::AbstractVector,b::AbstractVector)
     length(a) != length(b) && return false
@@ -224,7 +225,14 @@ end
                 lan LowCardinality(Nullable(String)),
                 arrs Array(LowCardinality(String)),
                 arrsn Array(Array(Int64)),
-                arrsnn Array(Array(Nullable(Int64)))
+                arrsnn Array(Array(Nullable(Int64))),
+                safunc SimpleAggregateFunction(sum, Int64),
+                ip4 Nullable(IPv4),
+                ip6 Nullable(IPv6),
+                dt64 DateTime64(6),
+                dt64_1 DateTime64(1),
+                dec32 Decimal32(4),
+                dec Decimal(11,4)
             )
             ENGINE = Memory
         """)
@@ -267,6 +275,33 @@ end
             [NullInt[5,6],NullInt[7]],
             [NullInt[1], NullInt[missing]]
             ],
+        :safunc => Int64[42, 1337, 123],
+        :ip4 => [IPv4("127.0.0.2"), missing, IPv4("127.0.0.1")],
+        :ip6 => [
+            IPv6("2a02:aa08:e000:3100::2"),
+            missing,
+            IPv6("2a02:aa08:e000:3100::3")
+        ],
+        :dt64 => [
+            DateTime(2020, 02, 02, 10, 5, 10, 320),
+            DateTime(2020, 02, 02, 10, 5, 10, 322),
+            DateTime(2020, 02, 02, 10, 5, 10, 323)
+        ],
+        :dt64_1 => [
+            DateTime(2020, 02, 02, 10, 5, 10, 320),
+            DateTime(2020, 02, 02, 10, 5, 10, 422),
+            DateTime(2020, 02, 02, 10, 5, 10, 523)
+        ],
+        :dec32 => [
+            Dec32("221.3213"),
+            Dec32("225.3215"),
+            Dec32("227.3219"),
+        ],
+        :dec => [
+            Dec64("5432221.3213"),
+            Dec64("6432221.4213"),
+            Dec64("7432221.5213")
+        ]
 
 
     )
@@ -319,6 +354,49 @@ end
         ]
     )
 
+    @test proj[:safunc] == Int64[42, 1337, 123, 42]
+
+    @test recursive_miss_cmp(proj[:ip4], [
+        IPv4("127.0.0.2"),
+        missing,
+        IPv4("127.0.0.1"),
+        IPv4("127.0.0.2")
+        ])
+    @test recursive_miss_cmp(proj[:ip6], [
+        IPv6("2a02:aa08:e000:3100::2"),
+        missing,
+        IPv6("2a02:aa08:e000:3100::3"),
+        IPv6("2a02:aa08:e000:3100::2")
+    ])
+
+    @test proj[:dt64] ==  [
+        DateTime(2020, 02, 02, 10, 5, 10, 320),
+        DateTime(2020, 02, 02, 10, 5, 10, 322),
+        DateTime(2020, 02, 02, 10, 5, 10, 323),
+        DateTime(2020, 02, 02, 10, 5, 10, 320)
+    ]
+
+    @test proj[:dt64_1] == [
+            DateTime(2020, 02, 02, 10, 5, 10, 300),
+            DateTime(2020, 02, 02, 10, 5, 10, 400),
+            DateTime(2020, 02, 02, 10, 5, 10, 500),
+            DateTime(2020, 02, 02, 10, 5, 10, 300),
+        ]
+
+    @test proj[:dec32] == [
+        Dec32("221.3213"),
+        Dec32("225.3215"),
+        Dec32("227.3219"),
+        Dec32("221.3213"),
+    ]
+    @test proj[:dec] == [
+        Dec64("5432221.3213"),
+        Dec64("6432221.4213"),
+        Dec64("7432221.5213"),
+        Dec64("5432221.3213"),
+
+    ]
+
     # SELECT Tuple -> Dict
 
     proj = ClickHouse.select(sock, "SELECT tuple(ddd, tuple(lul, foo)) as tup FROM $(table) LIMIT 2")
@@ -326,6 +404,11 @@ end
         (td, (UInt64(42), "aa")),
         (td, (UInt64(1337), "bb")),
     ]
+
+    proj = ClickHouse.select(sock, "SELECT null as n, array() as arr FROM $(table) LIMIT 3")
+    @test all(ismissing.(proj[:n]))
+    @test all(proj[:arr] .== Ref(Missing[]))
+
     # SELECT -> DF
     proj_df = select_df(sock, "SELECT * FROM $(table) LIMIT 3, 3")
     exp_df = DataFrame(data)

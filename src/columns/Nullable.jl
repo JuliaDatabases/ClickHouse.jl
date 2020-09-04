@@ -1,4 +1,5 @@
 using UUIDs
+import Sockets
 is_ch_type(::Val{:Nullable})  = true
 can_be_nullable(::Val{:Nullable}) = false
 
@@ -32,6 +33,8 @@ missing_replacement(::Type{UUID}) = UUID(0)
 missing_replacement(::Type{Date}) = Date(1970)
 missing_replacement(::Type{DateTime}) = unix2datetime(0)
 missing_replacement(::Type{String}) = ""
+missing_replacement(::Type{Sockets.IPv4}) = Sockets.IPv4(0)
+missing_replacement(::Type{Sockets.IPv6}) = Sockets.IPv6(0)
 
 
 uint8_ismissing(v)::UInt8 = ismissing(v) ? 1 : 0
@@ -82,4 +85,17 @@ function write_col_data(sock::ClickHouseSock,
     end
 
     write_col_data(sock, unmissing, nested)
+end
+
+#For Nothing columns,
+#(i.e. column of nulls in CHtypes of CH, of missing column in Julia types)
+function write_col_data(sock::ClickHouseSock,
+                                data::AbstractVector{Missing},
+                                ::Val{:Nullable}, nested::TypeAst) where {T}
+    nested.name != :Nothing &&
+        error("Vector{Missing} can be writen only to Nullable(Nothing) column")
+    missing_map = Vector{UInt8}(undef, length(data))
+    fill!(missing_map, 0x1)
+    chwrite(sock, missing_map)
+    write_col_data(sock, data, nested)
 end

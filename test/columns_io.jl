@@ -3,7 +3,9 @@ using ClickHouse: Column, chwrite, chread,
 using Dates
 using CategoricalArrays
 using UUIDs
-
+import Sockets
+using Sockets: IPv4, IPv6
+using DecFP
 
 @testset "Parse type" begin
     r = parse_typestring("Int32")
@@ -64,6 +66,26 @@ using UUIDs
 end
 
 @testset "Int columns" begin
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = Sockets.IPv4.(rand(UInt32, nrows))
+    column = Column("test", "IPv4", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = Sockets.IPv6.(rand(UInt128, nrows))
+    column = Column("test", "IPv6", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
+end
+
+@testset "IP columns" begin
 
     sock = ClickHouseSock(PipeBuffer())
     nrows = 100
@@ -144,6 +166,51 @@ end
     @test res == column
 
 end
+
+@testset "DateTime64 columns" begin
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = DateTime.(rand(2010:2020, nrows), rand(1:12, nrows), rand(1:20, nrows),
+    rand(0:23, nrows), rand(0:59, nrows), rand(0:59, nrows))
+    column = Column("test", "DateTime64(0)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = DateTime.(rand(2010:2020, nrows), rand(1:12, nrows), rand(1:20, nrows),
+    rand(0:23, nrows), rand(0:59, nrows), rand(0:59, nrows))
+    column = Column("test", "DateTime64(2)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = DateTime.(rand(2010:2020, nrows), rand(1:12, nrows), rand(1:20, nrows),
+    rand(0:23, nrows), rand(0:59, nrows), rand(0:59, nrows),
+    rand(1:999))
+    column = Column("test", "DateTime64(3)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = DateTime.(rand(2010:2020, nrows), rand(1:12, nrows), rand(1:20, nrows),
+    rand(0:23, nrows), rand(0:59, nrows), rand(0:59, nrows),
+    rand(1:999))
+    column = Column("test", "DateTime64(6)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
+end
+
+
+
 
 @testset "Enum columns" begin
 
@@ -262,8 +329,8 @@ end
 
     sock = ClickHouseSock(PipeBuffer())
     nrows = 100
-    data = CategoricalVector(rand(["a","b","c"], nrows))
-    data = convert(CategoricalVector{Union{String, Missing}}, data)
+    data = CategoricalVector(rand(["a","b","c", missing], nrows))
+
     data[rand(1:nrows, 20)] .= missing
 
     column = Column("test", "Nullable(Enum8('a'=1,'b'=3,'c'=10))", data)
@@ -403,4 +470,86 @@ end
     chwrite(sock, column)
     res = read_col(sock, VarUInt(nrows))
     @test recursive_miss_cmp(data, res.data)
+end
+
+@testset "Nothing column" begin
+    sock = ClickHouseSock(PipeBuffer())
+    data = [missing, missing, missing, missing]
+    column = Column("test", "Nullable(Nothing)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(4))
+    @test all(ismissing.(data))
+
+    sock = ClickHouseSock(PipeBuffer())
+    data = [[], [], [], []]
+    column = Column("test", "Array(Nothing)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(4))
+    @test all(data .== Ref(Missing[]))
+end
+
+@testset "Int columns" begin
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = rand(Int64, nrows)
+    column = Column("test", "SimpleAggregateFunction(sum, Int64)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = rand(Int32, nrows)
+    column = Column("test", "Int64", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
+end
+
+
+@testset "Decimal columns" begin
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = Dec32.(rand(1000:9999, nrows), -3)
+    column = Column("test", "Decimal32(3)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
+    sock = ClickHouseSock(PipeBuffer())
+    column = Column("test", "Decimal(4,3)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = Dec64.(rand(1000000000:9999999999, nrows), -4)
+    column = Column("test", "Decimal64(4)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
+    sock = ClickHouseSock(PipeBuffer())
+    column = Column("test", "Decimal(10,4)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+    sock = ClickHouseSock(PipeBuffer())
+    nrows = 100
+    data = Dec128.(rand(Int128(10)^20:(Int128(10)^21 - 1), nrows), -14)
+    column = Column("test", "Decimal128(14)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
+    sock = ClickHouseSock(PipeBuffer())
+    column = Column("test", "Decimal(20,14)", data)
+    chwrite(sock, column)
+    res = read_col(sock, VarUInt(nrows))
+    @test res == column
+
 end
