@@ -419,6 +419,38 @@ const SERVER_TABLES_LOG = UInt64(10)
 const SERVER_TABLE_COLUMNS = UInt64(11)
 
 # ============================================================================ #
+# [Dirty state]                                                                #
+# ============================================================================ #
+
+"""
+Check dirty state & mark as dirty.
+
+This is used for operations that need to be executed atomically and leave
+the socket in a corrupted state if an exeception ocurrs in between.
+
+This is intententionally not a `guard(x) do y .. end` function because the
+closure would result in all captured variables to be boxed, resulting in
+runtime overhead. It is also intentional that the dirty flag isn't cleared
+in case of exceptions between `enter_dirty` and `exit_dirty`.
+"""
+function enter_dirty(sock::ClickHouseSock)::Nothing
+    !sock.dirty || error(
+        "The socket is dirty. This means that another query is either " *
+        "currently in progress or an error left the socket in a dirty state. " *
+        "Please create a new connection."
+    )
+
+    sock.dirty = true
+    nothing
+end
+
+function exit_dirty(sock::ClickHouseSock)::Nothing
+    @assert sock.dirty
+    sock.dirty = false
+    nothing
+end
+
+# ============================================================================ #
 # [Message decoding]                                                           #
 # ============================================================================ #
 
@@ -446,9 +478,12 @@ function read_packet(
     sock::ClickHouseSock,
     opcode_map::Dict{UInt64, DataType},
 )::Any
+    enter_dirty(sock)
     opcode = chread(sock, VarUInt)
     ty = opcode_map[UInt64(opcode)]
-    chread(sock, ty)
+    packet = chread(sock, ty)
+    exit_dirty(sock)
+    packet
 end
 
 "ClickHouse server-side exception."
@@ -477,8 +512,11 @@ const CLIENT_TY_OPCODE_MAP = Dict(v => k for (k, v) ∈ CLIENT_OPCODE_TY_MAP)
 
 function write_packet(sock::ClickHouseSock, packet::Any)
     opcode = CLIENT_TY_OPCODE_MAP[typeof(packet)]
+
+    enter_dirty(sock)
     chwrite(sock, VarUInt(opcode))
     chwrite(sock, packet)
+    exit_dirty(sock)
 end
 
 # ============================================================================ #
