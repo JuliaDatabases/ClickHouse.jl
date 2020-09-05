@@ -216,6 +216,8 @@ end
                 foo String,
                 foo_fixed FixedString(5),
                 ddd Date,
+                dt DateTime,
+                dt_tz DateTime('CET'),
                 enu Enum8('a' = 1, 'c' = 3, 'foobar' = 44, 'd' = 9),
                 uuid UUID,
                 nn Nullable(Int64),
@@ -231,6 +233,7 @@ end
                 ip6 Nullable(IPv6),
                 dt64 DateTime64(6),
                 dt64_1 DateTime64(1),
+                dt64_1tz DateTime64(1, 'GMT'),
                 dec32 Decimal32(4),
                 dec Decimal(11,4)
             )
@@ -249,6 +252,8 @@ end
         :foo => String["aa", "bb", "cc"],
         :foo_fixed => String["aaaaa", "bbb", "cc"],
         :ddd => Date[td, td, td],
+        :dt => DateTime[td, td, td],
+        :dt_tz => DateTime[td, td, td],
         :enu => ["a", "c", "foobar"],
         :uuid => [
             UUID("c187abfa-31c1-4131-a33e-556f23f7aa67"),
@@ -292,6 +297,11 @@ end
             DateTime(2020, 02, 02, 10, 5, 10, 422),
             DateTime(2020, 02, 02, 10, 5, 10, 523)
         ],
+        :dt64_1tz => [
+            DateTime(2020, 02, 02, 10, 5, 11, 320),
+            DateTime(2020, 02, 02, 10, 5, 11, 422),
+            DateTime(2020, 02, 02, 10, 5, 10, 529)
+        ],
         :dec32 => [
             Dec32("221.3213"),
             Dec32("225.3215"),
@@ -302,8 +312,6 @@ end
             Dec64("6432221.4213"),
             Dec64("7432221.5213")
         ]
-
-
     )
 
     # Single block inserts.
@@ -321,6 +329,8 @@ end
     @test proj[:foo] == String["aa", "bb", "cc", "aa"]
     @test proj[:foo_fixed] == String["aaaaa", "bbb  ", "cc   ", "aaaaa"]
     @test proj[:ddd] == Date[td, td, td, td]
+    @test proj[:dt] == DateTime[td, td, td, td]
+    @test proj[:dt_tz] == DateTime[td, td, td, td]
     @test proj[:uuid] == vcat(data[:uuid], data[:uuid][1:1])
     @test recursive_miss_cmp(proj[:nn], [10, missing, 20 , 10])
     @test recursive_miss_cmp(proj[:ns], [missing, "sst", "aaa" , missing])
@@ -382,6 +392,13 @@ end
             DateTime(2020, 02, 02, 10, 5, 10, 500),
             DateTime(2020, 02, 02, 10, 5, 10, 300),
         ]
+
+    @test proj[:dt64_1tz] == [
+        DateTime(2020, 02, 02, 10, 5, 11, 300),
+        DateTime(2020, 02, 02, 10, 5, 11, 400),
+        DateTime(2020, 02, 02, 10, 5, 10, 500),
+        DateTime(2020, 02, 02, 10, 5, 11, 300),
+    ]
 
     @test proj[:dec32] == [
         Dec32("221.3213"),
