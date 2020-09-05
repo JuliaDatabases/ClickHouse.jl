@@ -13,18 +13,21 @@ Usage examples can be found on the [usage page](@ref Usage).
 
 ## Supported data types
 
-- String
+- String, FixedString(N)
 - Float32, Float64
 - Int8, Int16, Int32, Int64
 - UInt8, UInt16, UInt32, UInt64
-- Date, DateTime
+- Date, DateTime, DateTime64
 - Enum
 - UUID
-- FixedString(N)
 - Tuple
 - LowCardinality(T)
 - Nullable(T)
 - Array(T)
+- Nothing
+- SimpleAggregateFunction
+- IPv4, IPv6
+- Decimals
 
 All other types are currently not implemented. PRs welcome.
 
