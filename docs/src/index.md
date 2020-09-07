@@ -47,3 +47,10 @@ Usage examples can be found on the [usage page](@ref Usage).
 
 ```@contents
 ```
+
+## Credits
+
+- [@xzkostyan](https://github.com/xzkostyan)
+  (Konstantin Lebedev, maintainer of the
+  [Python ClickHouse driver](https://github.com/mymarilyn/clickhouse-driver)
+  that served as reference for many column type implementations in this lib)
