@@ -53,7 +53,7 @@ select_df(connect(), "SELECT * FROM MyTable LIMIT 3")
 
 # output
 
-3×3 DataFrames.DataFrame
+3×3 DataFrame
 │ Row │ f       │ s      │ u                  │
 │     │ Float32 │ String │ UInt64             │
 ├─────┼─────────┼────────┼────────────────────┤

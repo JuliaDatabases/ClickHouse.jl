@@ -29,11 +29,14 @@ Usage examples can be found on the [usage page](@ref Usage).
 - IPv4, IPv6
 - Decimals
 
-All other types are currently not implemented. PRs welcome.
-
 ## Limitations
 
-Transfer compression is currently not implemented.
+- Transfer compression is currently not implemented
+- Timezone conversion of `DateTime` / `DateTime64` for columns that have a
+  timezone assigned in ClickHouse doesn't happen automatically. All DateTime
+  objects are naive, meaning they aren't timezone aware. For reasoning, see
+  [this post](https://github.com/JuliaDatabases/ClickHouse.jl/pull/21) and
+  [this post](https://github.com/JuliaDatabases/ClickHouse.jl/issues/7#issuecomment-683311706).
 
 ## Index
 
