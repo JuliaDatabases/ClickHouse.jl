@@ -62,7 +62,7 @@ chwrite(sock::ClickHouseSock, x::Number) =
     write(sock.io, x)
 
 function chwrite(sock::ClickHouseSock, x::String)
-    chwrite(sock, x |> length |> VarUInt)
+    chwrite(sock, x |> sizeof |> VarUInt)
     chwrite(sock, x |> Array{UInt8})
 end
 
