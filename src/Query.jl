@@ -1,6 +1,6 @@
 using DataFrames
 using ProgressMeter
-using Sockets
+import Sockets
 
 
 # ============================================================================ #
@@ -8,7 +8,7 @@ using Sockets
 # ============================================================================ #
 
 function write_query(sock::ClickHouseSock, query::AbstractString)::Nothing
-    query = ClientQuery("", sock.client_info, "", 2, 0, query)
+    query = ClientQuery("", ClientInfo(), "", 2, 0, query)
     write_packet(sock, query)
     write_packet(sock, make_block())
     nothing
@@ -42,42 +42,13 @@ function make_block(columns::Vector{Column} = Column[])::Block
     Block("", BlockInfo(), num_columns, num_rows, columns)
 end
 
-# ============================================================================ #
-# [Queries]                                                                    #
-# ============================================================================ #
-
-"Establish a connection to a given ClickHouse instance."
-function connect(
-    host::AbstractString = "localhost",
-    port::Integer = 9000;
-    database::AbstractString = "",
-    username::AbstractString = "default",
-    password::AbstractString = "",
-)::ClickHouseSock
-    sock = ClickHouseSock(Sockets.connect(host, port))
-
-    # Say hello to the server!
-    write_packet(sock, ClickHouse.ClientHello(
-        CLIENT_NAME,
-        DBMS_VER_MAJOR,
-        DBMS_VER_MINOR,
-        DBMS_VER_REV,
-        database,
-        username,
-        password,
-    ))
-
-    # Read server info.
-    server_info = read_server_packet(sock)::ServerInfo
-    sock.server_tz = server_info.server_timezone
-
-    sock
-end
 
 "Send a ping request and wait for the response."
 function ping(sock::ClickHouseSock)::Nothing
-    write_packet(sock, ClientPing())
-    read_server_packet(sock)::ServerPong
+    @using_socket sock begin
+        write_packet(sock, ClientPing())
+        read_server_packet(sock)::ServerPong
+    end
     nothing
 end
 
@@ -86,19 +57,19 @@ function execute(
     sock::ClickHouseSock,
     ddl_query::AbstractString,
 )::Nothing
-    write_query(sock, ddl_query)
-
-    while true
-        packet = read_server_packet(sock)
-        if packet isa ServerProgress
-            # we just ignore these for DDL queries for now.
-        elseif packet isa ServerEndOfStream
-            break
-        else
-            error("Unexpected packet received: $(packet)")
+    @using_socket sock begin
+        write_query(sock, ddl_query)
+        while true
+            packet = read_server_packet(sock)
+            if packet isa ServerProgress
+                # we just ignore these for DDL queries for now.
+            elseif packet isa ServerEndOfStream
+                break
+            else
+                error("Unexpected packet received: $(packet)")
+            end
         end
     end
-
     nothing
 end
 
@@ -112,31 +83,32 @@ function insert(
     iter,
 )::Nothing where T
     # TODO: We might want to escape the table name here...
-    write_query(sock, "INSERT INTO $(table) VALUES")
+    @using_socket sock begin
+        write_query(sock, "INSERT INTO $(table) VALUES")
 
-    packet = read_server_packet(sock)
-    sample_block = if packet isa ServerTableColumns
-        packet.sample_block
-    else
-        packet::Block
+        packet = read_server_packet(sock)
+        sample_block = if packet isa ServerTableColumns
+            packet.sample_block
+        else
+            packet::Block
+        end
+
+        valid_columns = Dict(
+            Symbol(x.name) => x.type
+            for x ∈ sample_block.columns
+        )
+
+        for block_dict ∈ iter
+            columns = dict2columns(block_dict, valid_columns)
+            block = make_block(columns)
+            write_packet(sock, block)
+        end
+
+        # Empty block = end of data.
+        write_packet(sock, make_block())
+
+        read_server_packet(sock)::ServerEndOfStream
     end
-
-    valid_columns = Dict(
-        Symbol(x.name) => x.type
-        for x ∈ sample_block.columns
-    )
-
-    for block_dict ∈ iter
-        columns = dict2columns(block_dict, valid_columns)
-        block = make_block(columns)
-        write_packet(sock, block)
-    end
-
-    # Empty block = end of data.
-    write_packet(sock, make_block())
-
-    read_server_packet(sock)::ServerEndOfStream
-
     nothing
 end
 
@@ -148,45 +120,50 @@ function select_callback(
     show_progress::Bool = false,
     progress_kwargs::Dict = Dict(),
 )::Nothing
-    write_query(sock, query)
+    @using_socket sock begin
+        write_query(sock, query)
 
-    sample_block = read_server_packet(sock)
-    sample_block::Block
-    @assert UInt64(sample_block.num_rows) == 0
+        sample_data::ServerData = read_server_packet(sock)
+        sample_block = sample_data.data
+        @assert UInt64(sample_block.num_rows) == 0
 
-    progress_bar = nothing
-    progress_rows::Int64 = 0
-    while true
-        packet = read_server_packet(sock)
+        progress_bar = nothing
+        progress_rows::Int64 = 0
+        while true
+            packet = read_server_packet(sock)
 
-        handle(x::ServerProfileInfo) = true
-        handle(x::ServerEndOfStream) = false
+            handle(x::ServerProfileInfo) = true
+            handle(x::ServerEndOfStream) = false
 
-        function handle(x::ServerProgress)
-            if show_progress
-                if progress_bar === nothing
-                    progress_bar = Progress(
-                        x.total_rows |> UInt64 |> Int64;
-                        progress_kwargs...
-                    )
+            function handle(x::ServerProgress)
+                if show_progress
+                    if progress_bar === nothing
+                        progress_bar = Progress(
+                            x.total_rows |> UInt64 |> Int64;
+                            progress_kwargs...
+                        )
+                    end
+                    rows = x.rows |> UInt64 |> Int64
+                    progress_rows += rows
+                    update!(progress_bar, progress_rows)
                 end
-                rows = x.rows |> UInt64 |> Int64
-                progress_rows += rows
-                update!(progress_bar, progress_rows)
+
+                true
             end
 
-            true
-        end
+            handle(p::Union{ServerData, ServerTotals, ServerExtremes}) =
+                                        handle(p.data)
 
-        function handle(block::Block)
-            if UInt64(block.num_rows) != 0
-                block.columns |> columns2dict |> callback
+            function handle(block::Block)
+                if UInt64(block.num_rows) != 0
+                    block.columns |> columns2dict |> callback
+                end
+                true
             end
-            true
-        end
 
-        if !handle(packet)
-            break
+            if !handle(packet)
+                break
+            end
         end
     end
 end
