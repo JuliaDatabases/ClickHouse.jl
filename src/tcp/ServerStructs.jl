@@ -12,7 +12,8 @@ struct ServerInfo
     server_version_patch::VarUInt
 end
 
-#it's special case because we don't now server revision before read this packet
+# This is a special case and can't use @ch_struct because we don't  
+# know the server revision before reading this packet
 function chread(sock::ClickHouseSock, ::Type{ServerInfo})
     server_name = chread(sock, String)
     server_major_ver = chread(sock, VarUInt)
