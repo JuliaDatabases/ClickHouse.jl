@@ -1,3 +1,5 @@
+# This is a special case and can't use @ch_struct because we don't
+# know the server revision before reading this packet
 struct ServerInfo
     server_name::String
     server_major_ver::VarUInt
@@ -12,8 +14,6 @@ struct ServerInfo
     server_version_patch::VarUInt
 end
 
-# This is a special case and can't use @ch_struct because we don't  
-# know the server revision before reading this packet
 function chread(sock::ClickHouseSock, ::Type{ServerInfo})
     server_name = chread(sock, String)
     server_major_ver = chread(sock, VarUInt)
@@ -21,7 +21,7 @@ function chread(sock::ClickHouseSock, ::Type{ServerInfo})
     server_rev = chread(sock, VarUInt)
     rev = UInt64(server_rev)
     server_timezone = has_server_timezone(rev) ?
-                        chread(sock, String) : "UTM"
+                        chread(sock, String) : "UTC"
     server_display_name = has_server_display_name(rev) ?
                         chread(sock, String) : ""
     server_version_patch = has_version_patch(rev) ?

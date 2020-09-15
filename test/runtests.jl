@@ -24,7 +24,7 @@ function mock_server_info()
         19,
         11,
         54423,
-        "UTM",
+        "UTC",
         "mock server",
         10
     )
