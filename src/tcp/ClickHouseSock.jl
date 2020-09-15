@@ -30,18 +30,11 @@ mutable struct ClickHouseSock
     end
 end
 
-function guarded(f, sock::ClickHouseSock)
-    lock(sock.cond)
-    try
-        res = f(sock)
-        unlock(sock.cond)
-        return res
-    catch e
-        unlock(sock.cond)
-        rethrow(e)
-    end
-end
+"""
+    @guarded(sock::ClickHouseSock, expr)
 
+    Run `expr` thread-safe under lock of `sock.cond`.
+"""
 macro guarded(sock, expr)
     quote
         lock($(esc(sock)).cond)
@@ -62,25 +55,15 @@ is_busy(sock::ClickHouseSock) = @guarded sock sock.busy
 set_busy!(sock::ClickHouseSock, value::Bool) =
                         @guarded sock sock.busy = value
 
-function using_socket(f, sock::ClickHouseSock)
-    @guarded sock begin
-        isnothing(sock.io) && error("ClickHouseSock not connected")
-        sock.busy && error("ClickHouseSock is busy")
-        sock.busy = true
-    end
-    try
-        res = f(sock)
-        set_busy!(sock, false)
-        return res
-    catch e
-        typeof(e) == ClickHouseServerException ?
-                set_busy!(sock, false) :
-                close(sock)
 
-        rethrow(e)
-    end
-end
+"""
+    @using_socket(sock::ClickHouseSock, expr)
 
+    Set `sock.busy` status and run `expr`.
+    Rise an exception if `sock` is not connected or already busy.
+    If an exception occurs during the execution of an expression and this exception is not a server exception,
+    the socket will disconnect
+"""
 macro using_socket(sock, expr)
     quote
         @guarded $(esc(sock)) begin

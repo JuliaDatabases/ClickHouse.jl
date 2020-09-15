@@ -52,16 +52,18 @@ function read_col(sock::ClickHouseSock, num_rows::VarUInt)::Column
     type_name = chread(sock, String)
 
     type = parse_typestring(type_name)
-    data = UInt64(num_rows) == 0 ?
-    result_type(type)(undef, 0) :
-    try
-        read_state_prefix(sock, type)
-        read_col_data(sock, num_rows, type)
-    catch e
-        if e isa ArgumentError
-            error("Error while reading col $(name) ($(type)): $(e.msg)")
-        else
-            rethrow(e)
+    data = if UInt64(num_rows) == 0
+        result_type(type)(undef, 0)
+    else
+        try
+            read_state_prefix(sock, type)
+            read_col_data(sock, num_rows, type)
+        catch e
+            if e isa ArgumentError
+                error("Error while reading col $(name) ($(type)): $(e.msg)")
+            else
+                rethrow(e)
+            end
         end
     end
     Column(name, type_name, data)

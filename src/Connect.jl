@@ -8,6 +8,13 @@ function Base.close(sock::ClickHouseSock)
     end
 end
 
+"""
+    connect!(sock::ClickHouseSock; force = false)
+
+Connects `sock` to ClickHouse server using connection settings from `sock.settings`
+If `force = false` and `sock` already connected then existing connection is used
+If `force = true` then `sock` then the socket is closed and a new connection is created
+"""
 function connect!(sock::ClickHouseSock; force = false)
     force && is_connected(sock) && close(sock)
     is_connected(sock) && return sock
@@ -24,6 +31,7 @@ function connect!(sock::ClickHouseSock; force = false)
             if tcp.status == Sockets.StatusConnecting
                 timeout[] = true
                 tcp.status = Base.StatusClosing
+                #force close of stream. Mormal close will wait for handing of connecting process what we don't need
                 ccall(:jl_forceclose_uv, Nothing, (Ptr{Nothing},), tcp.handle)
             end
         end
@@ -36,17 +44,22 @@ function connect!(sock::ClickHouseSock; force = false)
             rethrow(e)
         end
 
-        @guarded sock sock.io = tcp
 
-        write_packet(sock, ClientHello(
-            CLIENT_NAME,
-            DBMS_VER_MAJOR,
-            DBMS_VER_MINOR,
-            DBMS_VER_REV,
-            @guarded(sock, sock.settings.database),
-            @guarded(sock, sock.settings.username),
-            @guarded(sock, sock.settings.password)
-        ))
+        hello = @guarded sock begin
+            sock.io = tcp
+            ClientHello(
+                CLIENT_NAME,
+                DBMS_VER_MAJOR,
+                DBMS_VER_MINOR,
+                DBMS_VER_REV,
+                sock.settings.database,
+                sock.settings.username,
+                sock.settings.password
+            )
+
+        end
+
+        write_packet(sock, hello)
         info = read_packet(sock, ServerCodes)::ServerInfo
         @guarded sock begin
             sock.server_name = isempty(info.server_display_name) ?
@@ -62,6 +75,18 @@ function connect!(sock::ClickHouseSock; force = false)
     return sock
 end
 
+"""
+    connect(host = "localhost", port = 9000;
+        database = "",
+        username = "default",
+        password = "",
+        connection_timeout = DBMS_DEFAULT_CONNECT_TIMEOUT,
+        max_insert_block_size = DBMS_DEFAULT_MAX_INSERT_BLOCK,
+        send_buffer_size = DBMS_DEFAULT_BUFFER_SIZE
+    )
+
+Return `ClickHouseSock` connected to ClickHouse server with the specified parameters
+"""
 function connect(
     host::AbstractString = "localhost",
     port::Integer = 9000;

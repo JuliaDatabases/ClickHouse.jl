@@ -1,4 +1,4 @@
-using ClickHouse: ClickHouseSock, CHSettings, using_socket, is_connected,
+using ClickHouse: ClickHouseSock, CHSettings, is_connected,
                 is_busy, chwrite, chread, has_temporary_tables, ClientInfo,
                 VarUInt, write_packet, read_packet, @using_socket, ClientHello
 
@@ -18,7 +18,7 @@ end
     sock = ClickHouseSock(nothing)
 
     try
-        using_socket(sock) do s
+        @using_socket sock begin
             sleep(1)
         end
         @test false
