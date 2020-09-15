@@ -109,14 +109,8 @@ end
 
 macro reg_packet(code, packet_struct)
     result = Expr(:block)
-    push!(
-        result.args,
-        esc(
-            :(
-                packet_struct(::Val{$code}) = $packet_struct
-            )
-        )
-    )
+    func = :(packet_struct(::Val{$code}) = $packet_struct)
+    push!(result.args, esc(func))
     push!(
         result.args,
         esc(
