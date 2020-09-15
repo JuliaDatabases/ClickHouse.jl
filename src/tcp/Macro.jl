@@ -1,7 +1,7 @@
 """ @ch_struct
 
-Macro for define CH readable/writable struct with possibility of restriction
-fields by server revision
+Macro for defining CH read/writable structs with the support for 
+restricting fields by server revision.
 """
 macro ch_struct(expr)
     expr isa Expr && expr.head === :struct || error("Invalid usage of @ch_struct")
