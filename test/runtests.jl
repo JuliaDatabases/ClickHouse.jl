@@ -17,7 +17,24 @@ function recursive_miss_cmp(a,b)
     return (ismissing(a) && ismissing(b)) ||
         (!ismissing(a == b) && a==b)
 end
+
+function mock_server_info()
+    return ClickHouse.ServerInfo(
+        "mock",
+        19,
+        11,
+        54423,
+        "UTC",
+        "mock server",
+        10
+    )
+end
+
+
+include("defines.jl")
+include("tcp.jl")
 include("columns_io.jl")
+
 
 function miss_or_equal(a, b)
     return (ismissing(a) && ismissing(b)) ||
@@ -41,6 +58,7 @@ end
     # with the official ClickHouse command line client.
     data = read(open("select1/client-query.bin"), 100_000, all = true)
     sock = data |> IOBuffer |> ClickHouseSock
+    sock.server_rev = ClickHouse.DBMS_VER_REV
     packets = []
 
     # Read packets.
@@ -67,6 +85,7 @@ end
 
     sock = IOBuffer(UInt8[], write = true, read = true, maxsize = 100_000) |>
         ClickHouseSock
+    sock.server_rev = ClickHouse.DBMS_VER_REV
 
     for packet ∈ packets
         ClickHouse.write_packet(sock, packet)
@@ -80,6 +99,7 @@ end
 
 @testset "Decode server packets (SELECT 1)" begin
     sock = open("select1/server-query-resp.bin") |> ClickHouseSock
+    sock.server_rev = ClickHouse.DBMS_VER_REV
 
     packet = read_server_packet(sock)
     @test typeof(packet) == ClickHouse.ServerInfo
@@ -88,10 +108,10 @@ end
     @test typeof(packet) == ClickHouse.ServerPong
 
     packet = read_server_packet(sock)
-    @test typeof(packet) == ClickHouse.Block
+    @test typeof(packet) == ClickHouse.ServerData
 
     packet = read_server_packet(sock)
-    @test typeof(packet) == ClickHouse.Block
+    @test typeof(packet) == ClickHouse.ServerData
 
     packet = read_server_packet(sock)
     @test typeof(packet) == ClickHouse.ServerProfileInfo
@@ -100,7 +120,7 @@ end
     @test typeof(packet) == ClickHouse.ServerProgress
 
     packet = read_server_packet(sock)
-    @test typeof(packet) == ClickHouse.Block
+    @test typeof(packet) == ClickHouse.ServerData
 
     packet = read_server_packet(sock)
     @test typeof(packet) == ClickHouse.ServerEndOfStream
@@ -110,6 +130,7 @@ end
 
 @testset "Decode client packets (INSERT INTO woof VALUES (1))" begin
     sock = open("insert1/client.bin") |> ClickHouseSock
+    sock.server_rev = ClickHouse.DBMS_VER_REV
 
     while !eof(sock.io)
         packet = read_client_packet(sock)
@@ -120,6 +141,7 @@ end
 
 @testset "Decode server packets (OHLC data)" begin
     sock = open("insert-ohlc/server.bin") |> ClickHouseSock
+    sock.server_rev = ClickHouse.DBMS_VER_REV
 
     while !eof(sock.io)
         packet = read_server_packet(sock)
@@ -128,6 +150,7 @@ end
 
 @testset "Decode server packets (enums)" begin
     sock = open("enum/server.bin") |> ClickHouseSock
+    sock.server_rev = ClickHouse.DBMS_VER_REV
 
     while !eof(sock.io)
         packet = read_server_packet(sock)
@@ -137,6 +160,7 @@ end
 @testset "Decode & re-encode client packets (enums)" begin
     data = read(open("enum/client.bin"), 10_000, all = true)
     sock = IOBuffer(data) |> ClickHouseSock
+    sock.server_rev = ClickHouse.DBMS_VER_REV
 
     # Read packets.
 
@@ -152,6 +176,7 @@ end
 
     sock = IOBuffer(UInt8[], write = true, read = true, maxsize = 10_000) |>
         ClickHouseSock
+    sock.server_rev = ClickHouse.DBMS_VER_REV
     for packet ∈ packets
         ClickHouse.write_packet(sock, packet)
     end
@@ -164,6 +189,7 @@ end
 
 @testset "Decode server packets (exception)" begin
     sock = open("error/server.bin") |> ClickHouseSock
+    sock.server_rev = ClickHouse.DBMS_VER_REV
 
     while !eof(sock.io)
         try
@@ -179,6 +205,7 @@ end
 @testset "Decode & re-encode client packets (OHLC data)" begin
     data = read(open("insert-ohlc/client.bin"), 1_000_000, all = true)
     sock = IOBuffer(data) |> ClickHouseSock
+    sock.server_rev = ClickHouse.DBMS_VER_REV
 
     # Read packets.
 
@@ -194,6 +221,7 @@ end
 
     sock = IOBuffer(UInt8[], write = true, read = true, maxsize = 1_000_000) |>
         ClickHouseSock
+    sock.server_rev = ClickHouse.DBMS_VER_REV
     for packet ∈ packets
         ClickHouse.write_packet(sock, packet)
     end
@@ -240,9 +268,10 @@ end
             ENGINE = Memory
         """)
     catch exc
-        exc::ClickHouseServerException
-        occursin(r"Table .* already exists", exc.exc.message) || rethrow()
-        sock = connect()
+        rethrow(exc)
+        #exc::ClickHouseServerException
+        #occursin(r"Table .* already exists", exc.exc.message) || rethrow()
+        #sock = connect()
     end
     NullInt = Union{Int64, Missing}
     td = today()
