@@ -31,7 +31,7 @@ function connect!(sock::ClickHouseSock; force = false)
             if tcp.status == Sockets.StatusConnecting
                 timeout[] = true
                 tcp.status = Base.StatusClosing
-                #force close of stream. Mormal close will wait for handing of connecting process what we don't need
+                #force close of stream. Normal close will wait for handing of connecting process what we don't need
                 ccall(:jl_forceclose_uv, Nothing, (Ptr{Nothing},), tcp.handle)
             end
         end
