@@ -60,9 +60,9 @@ set_busy!(sock::ClickHouseSock, value::Bool) =
     @using_socket(sock::ClickHouseSock, expr)
 
     Set `sock.busy` status and run `expr`.
-    Rise an exception if `sock` is not connected or already busy.
-    If an exception occurs during the execution of an expression and this exception is not a server exception,
-    the socket will disconnect
+    Raises an exception if `sock` is not connected or already busy.
+    If an exception occurs during the execution of an expression and this exception
+    is not a server exception, the socket will disconnect.
 """
 macro using_socket(sock, expr)
     quote
