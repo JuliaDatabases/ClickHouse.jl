@@ -62,7 +62,7 @@ function write_col_data(sock::ClickHouseSock,
     !can_be_nullable(nested.name) &&
             error("$(nested.name) cannot be inside Nullable")
 
-    missing_map = fill(Int8(0), 1:length(data))
+    missing_map = fill(Int8(0), length(data))
     chwrite(sock, missing_map)
     write_col_data(sock, data, nested)
 end
