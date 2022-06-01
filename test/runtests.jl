@@ -1,7 +1,6 @@
 using Test
 using ClickHouse
 using ClickHouse: read_client_packet, read_server_packet
-using DataFrames
 using Dates
 using UUIDs
 using DecFP
@@ -454,17 +453,6 @@ end
     proj = ClickHouse.select(sock, "SELECT null as n, array() as arr FROM $(table) LIMIT 3")
     @test all(ismissing.(proj[:n]))
     @test all(proj[:arr] .== Ref(Missing[]))
-
-    # SELECT -> DF
-    proj_df = select_df(sock, "SELECT * FROM $(table) LIMIT 3, 3")
-    exp_df = DataFrame(data)
-
-    # Normalize column order.
-    order = [:lul, :oof, :foo, :ddd]
-    proj_df = proj_df[:, order]
-    exp_df = exp_df[:, order]
-
-    @test proj_df == exp_df
 
     # Clean up.
     execute(sock, "DROP TABLE $(table)")

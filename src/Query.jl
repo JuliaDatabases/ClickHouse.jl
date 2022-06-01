@@ -1,4 +1,3 @@
-using DataFrames
 using ProgressMeter
 import Sockets
 
@@ -200,15 +199,6 @@ function select(
         end
     end
     result
-end
-
-"Execute a query, flattening blocks into a dataframe."
-function select_df(
-    sock::ClickHouseSock,
-    query::AbstractString;
-    kwargs...
-)::DataFrame
-    select(sock, query; kwargs...) |> pairs |> DataFrame
 end
 
 # ============================================================================ #
