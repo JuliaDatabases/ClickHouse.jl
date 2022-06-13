@@ -1,7 +1,7 @@
 name = "ClickHouse"
 uuid = "82f2e89e-b495-11e9-1d9d-fb40d7cf2130"
 authors = ["Joel Höner <athre0z@zyantific.com>", "Alexandr Romanenko <waralex@gmail.com>"]
-version = "0.2.1"
+version = "0.2.2"
 
 [deps]
 CategoricalArrays = "324d7699-5711-5eae-9e2f-1d82baa6b597"
