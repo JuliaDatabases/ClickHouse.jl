@@ -1,4 +1,5 @@
 using UUIDs
+
 is_ch_type(::Val{:LowCardinality})  = true
 can_be_nullable(::Val{:LowCardinality}) = false
 
@@ -45,8 +46,8 @@ end
 function make_result(index::CategoricalVector{T}, keys, is_nullable) where {T}
 
     result = is_nullable ?
-            CategoricalVector{Union{T, Missing}}(undef, 0, levels = get.(index))  :
-            CategoricalVector{T}(undef, 0, levels = get.(index))
+            CategoricalVector{Union{T, Missing}}(undef, 0, levels = unwrap.(index))  :
+            CategoricalVector{T}(undef, 0, levels = unwrap.(index))
     result.refs = keys
     return result
 end
