@@ -5,7 +5,7 @@ result_type(::Val{:Enum16}, args...)  = CategoricalVector{String}
 
 const ENUM_RE_ARG = r"""
 
-           '((?:(?:[^'])|(?:\\'))+)'
+           '((?:(?:[^'])|(?:\\'))*)'
            \s*=\s*
            (-?\d+)
            \s*$
