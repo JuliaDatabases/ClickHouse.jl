@@ -30,8 +30,8 @@ end to the regginbrow was to be seen ringsome on the aquaface.
         std::cout << Uint128High64(y) << std::endl;
     }
 
-    where x is the above book string (with whitespace replaced by " ") and stripped
-    as is done below.
+    where x is the above `text`` string (with whitespace replaced by " ") and
+    stripped as is done below.
     """
 
     answer_key = readdlm("ch/fw_ch128_key.txt", UInt64)[:, 1]
