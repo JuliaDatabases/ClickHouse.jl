@@ -25,17 +25,17 @@ u128(val) = val % UInt128
 end
 
 ## Equivalent to Rotate(), but requires the second arg to be non-zero.
-@inline function rotate_by_at_least1(val::UInt64, shift::Int)
+@inline function rotate_by_at_least1(val::UInt64, shift::Integer)
     return (val >> shift) | (val << (64 - shift))
 end
 
-@inline function shift_mix(val::UInt64)
+@inline function shift_mix(val::UInt64)::UInt64
     return val ⊻ (val >> 47)
 end
 
 @inline low64(x::UInt128)::UInt64 = u64(x)
 @inline high64(x::UInt128)::UInt64 = u64(x >> 64)
-@inline UInt128(x::UInt64, y::UInt64) = (u128(y) << 64) + u128(x)
+@inline u128_from_pair(x::UInt64, y::UInt64)::UInt128 = (u128(y) << 64) + u128(x)
 
 """
 Hash 128 input bits down to 64 bits of output.
@@ -52,7 +52,7 @@ This is intended to be a reasonably good hash function.
     return b
 end
 
-hash_len_16(u::UInt64, v::UInt64)::UInt64 = hash_128_to_64(UInt128(u, v))
+hash_len_16(u::UInt64, v::UInt64)::UInt64 = hash_128_to_64(u128_from_pair(u, v))
 reinterpret_first(type, A) = reinterpret(type, A)[begin]
 
 @views function fetch64(s::AbstractArray{})::UInt64
@@ -71,7 +71,7 @@ end
     reinterpret_first(UInt32, s[start:start+3])
 end
 
-@views function hash_len_0_to_16(s::Vector{UInt8}, len::UInt)::UInt64
+@views function hash_len_0_to_16(s::AbstractArray{}, len::UInt)::UInt64
     if len > 8
         a = fetch64(s)
         b = fetch64(s, len - 7)
@@ -90,9 +90,10 @@ end
         z = len + u32(c) << 2
         return shift_mix(y * k2 ⊻ z * k3) * k2
     end
+    k2
 end
 
-function hash_len_17_to_32(s::Vector{UInt8}, len::UInt)::UInt64
+function hash_len_17_to_32(s::AbstractArray{}, len::UInt)::UInt64
     a = fetch64(s) * k1
     b = fetch64(s, 9)
     c = fetch64(s, len - 7) * k2
@@ -123,13 +124,14 @@ function weak_hash_len32_with_seeds(s::AbstractArray{}, a::UInt64, b::UInt64)
     )
 end
 
-@views function hash_len_33_to_64(s::Vector{UInt8}, len::UInt)
+@views function hash_len_33_to_64(s::AbstractArray{}, len::UInt)
     z = fetch64(s, 25)
     a = fetch64(s) + (len + fetch64(s, len - 15)) * k0
     b = rotate(a + z, 52)
     c = rotate(a, 37)
     a += fetch64(s, 9)
     c += rotate(a, 7)
+    a += fetch64(s, 17)
     vf = a + z
     vs = b + rotate(a, 31) + c
     a = fetch64(s, 17) + fetch64(s, len - 31)
@@ -141,11 +143,11 @@ end
     a += fetch64(s, len - 15)
     wf = a + z
     ws = b + rotate(a, 31) + c
-    r = shift_mix((vf + ws) * k2 + (wf + vs) * k0)l
+    r = shift_mix((vf + ws) * k2 + (wf + vs) * k0)
     return shift_mix(r * k0 + vs) * k2
 end
 
-@views function city_hash_64(s::Vector{UInt8}, len::UInt)
+@views function city_hash_64(s::AbstractArray{}, len::UInt)
     if (len <= 32)
         if len < 16
             return hash_len_0_to_16(s, len)
@@ -195,16 +197,21 @@ function city_hash_64(s::Vector{UInt8}, len::UInt, seed0::UInt, seed1::UInt)
     return hash_len_16(city_hash_64(s, len) - seed0, seed1)
 end
 
+function city_hash_64(s::AbstractString)::UInt64
+    data = Vector{UInt8}(s)
+    return city_hash_64(data, UInt(length(data)))
+end
+
 """
 A subroutine for CityHash128().  Returns a decent 128-bit hash for strings
 of any length representable in signed long.  Based on City and Murmur.
 """
-@views function city_murmor(s::Vector{UInt8}, len::UInt, seed::UInt128)::UInt128
+@views function city_murmor(s::AbstractArray{}, len::UInt, seed::UInt128)::UInt128
     a = low64(seed)
     b = high64(seed)
     c = 0
     d = 0
-    l = Int64(len - 16)
+    l = Int(len) - 16
     if l <= 0
         a = shift_mix(a * k1) * k1
         c = b * k1 + hash_len_0_to_16(s, len)
@@ -216,21 +223,21 @@ of any length representable in signed long.  Based on City and Murmur.
         while true
             a ⊻= shift_mix(fetch64(s) * k1) * k1
             a *= k1
-            b ⊻= b
+            b ⊻= a
             c ⊻= shift_mix(fetch64(s, 9) * k1) * k1
             c *= k1
             d ⊻= c
-            s += 16
+            s = s[17:end]
             l -= 16
             l > 0 || break
         end
     end
     a = hash_len_16(a, c)
     b = hash_len_16(d, b)
-    return UInt128(a ⊻ b, hash_len_16(b, a))
+    return u128_from_pair(a ⊻ b, hash_len_16(b, a))
 end
 
-@views function city_hash_128_with_seed(s::Vector{UInt8}, len::UInt, seed::UInt128):::UInt128
+@views function city_hash_128_with_seed(s::AbstractArray{}, len::UInt, seed::UInt128)::UInt128
     if len < 128
         return city_murmor(s, len, seed)
     end
@@ -292,26 +299,28 @@ end
     # different 48-byte-to-8-byte hashes to get a 16-byte final result.
     x = hash_len_16(x, v[1])
     y = hash_len_16(y, w[1])
-    return UInt128(hash_len_16(x + v[2], w[2]) + y,
+
+    return u128_from_pair(hash_len_16(x + v[2], w[2]) + y,
         hash_len_16(x + w[2], y + v[2]))
+    return t
 end
 
 @views function city_hash_128(s::Vector{UInt8}, len::UInt)::UInt128
     if len >= 16
         return city_hash_128_with_seed(s[17:end],
             len - 16,
-            UInt128(fetch64(s) ⊻ k3, fetch64(s[9:16]))
+            u128_from_pair(fetch64(s) ⊻ k3, fetch64(s[9:16]))
         )
     elseif len >= 8
         return city_hash_128_with_seed(
-            [], 0, UInt128(fetch64(s) ⊻ (len * k0), fetch64(s[len-7:len]) ⊻ k1)
+            Vector{UInt8}([]), UInt(0), u128_from_pair(fetch64(s) ⊻ (len * k0), fetch64(s[len-7:len]) ⊻ k1)
         )
     else
-        return city_hash_128_with_seed(s, len, UInt128(k0, k1))
+        return city_hash_128_with_seed(s, len, u128_from_pair(k0, k1))
     end
 end
 
-function city_hash_128(s::String)::UInt128
+function city_hash_128(s::AbstractString)::UInt128
     data = Vector{UInt8}(s)
-    city_hash_128(data, length(data))
+    return city_hash_128(data, UInt(length(data)))
 end
