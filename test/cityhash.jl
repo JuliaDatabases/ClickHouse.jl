@@ -52,7 +52,6 @@ end
     # examples given https://clickhouse.com/docs/en/native-protocol/hash/#implementations
     @test city_hash_64("Moscow") == UInt64(12507901496292878638)
     @test city_hash_64("How can you write a big system without C++?  -Paul Glick") == UInt64(6237945311650045625)
-    @test city_hash_64("A: Use Julia") == city_hash_64("A: Use Julia")
 end
 
 @testset "CityHash128 Unicode" begin
