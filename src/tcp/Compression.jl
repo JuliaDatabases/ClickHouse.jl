@@ -26,14 +26,14 @@ function compress(mode::Compression, data::Vector{UInt8})::Vector{UInt8}
 end
 
 """decompress data according to the compression mode"""
-function decompress(mode::Compression, data::Vector{UInt8})::Vector{UInt8}
+function decompress(
+    mode::Compression,
+    data::Vector{UInt8},
+    uncompressed_size::Integer = length(data) * 2
+)::Vector{UInt8}
     return if mode == COMPRESSION_NONE || mode == COMPRESSION_DRY
         data
     elseif mode == COMPRESSION_LZ4
-        lz4_decompress(data)
+        lz4_decompress(data, uncompressed_size)
     end
-end
-
-function chwrite(sock::ClickHouseSock, compression::ClickHouse.Compression)
-    chwrite(sock, UInt8(compression))
 end

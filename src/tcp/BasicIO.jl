@@ -72,3 +72,14 @@ chwrite(sock::ClickHouseSock, x::AbstractVector{T}) where T <: Number =
 
 chwrite(sock::ClickHouseSock, x::AbstractVector{String}) =
     foreach(x -> chwrite(sock, x), x)
+
+
+# Compression bytes
+
+function chwrite(sock::ClickHouseSock, compression::ClickHouse.Compression)
+    chwrite(sock, UInt8(compression))
+end
+
+function chread(sock::ClickHouseSock, ::Type{ClickHouse.Compression})
+    Compression(chread(sock, UInt8))
+end

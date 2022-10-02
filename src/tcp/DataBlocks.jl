@@ -106,11 +106,11 @@ function chread(sock::ClickHouseSock, ::Type{Block})::Block
     try
         if compression_enabled(sock.settings)
             hash = chread(sock, UInt128)
-            method = Compression(chread(sock, UInt8))
+            method = chread(sock, Compression)
             compressed = chread(sock, UInt32)
-            original = chread(sock, UInt32)
+            original = chread(sock, UInt32)  # TODO, not needed?
             comp_data = chread(sock, Vector{UInt8}, VarUInt(compressed - 9))
-            decomp_data = decompress(COMPRESSION_LZ4, comp_data)
+            decomp_data = decompress(method, comp_data, original)
             sock.io = IOBuffer(decomp_data)
         end
 
