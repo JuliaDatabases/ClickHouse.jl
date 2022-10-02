@@ -302,21 +302,20 @@ end
 
     return u128_from_pair(hash_len_16(x + v[2], w[2]) + y,
         hash_len_16(x + w[2], y + v[2]))
-    return t
 end
 
 @views function city_hash_128(s::Vector{UInt8}, len::UInt)::UInt128
-    if len >= 16
-        return city_hash_128_with_seed(s[17:end],
+    return if len >= 16
+        city_hash_128_with_seed(s[17:end],
             len - 16,
             u128_from_pair(fetch64(s) ⊻ k3, fetch64(s[9:16]))
         )
     elseif len >= 8
-        return city_hash_128_with_seed(
+        city_hash_128_with_seed(
             Vector{UInt8}([]), UInt(0), u128_from_pair(fetch64(s) ⊻ (len * k0), fetch64(s[len-7:len]) ⊻ k1)
         )
     else
-        return city_hash_128_with_seed(s, len, u128_from_pair(k0, k1))
+        city_hash_128_with_seed(s, len, u128_from_pair(k0, k1))
     end
 end
 

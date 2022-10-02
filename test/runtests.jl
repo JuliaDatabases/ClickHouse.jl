@@ -57,7 +57,7 @@ end
 
 @testset "Decode & re-encode client packets (SELECT 1)" begin
     # This .bin file was extracted from a tcpdump captured from a session
-    # with the official ClickHouse mand line client.
+    # with the official ClickHouse command line client.
     data = read(open("select1/client-query.bin"), 100_000, all = true)
     sock = data |> IOBuffer |> ClickHouseSock
     sock.server_rev = ClickHouse.DBMS_VER_REV
