@@ -107,11 +107,24 @@ function chread(sock::ClickHouseSock, ::Type{Block})::Block
         if compression_enabled(sock.settings)
             hash = chread(sock, UInt128)
             method = chread(sock, Compression)
-            compressed = chread(sock, UInt32)
-            original = chread(sock, UInt32)  # TODO, not needed?
-            comp_data = chread(sock, Vector{UInt8}, VarUInt(compressed - 9))
-            decomp_data = decompress(method, comp_data, original)
-            sock.io = IOBuffer(decomp_data)
+            raw_len = chread(sock, UInt32)
+            data_len = chread(sock, UInt32)
+            compressed_len = VarUInt(raw_len - HEADER_SIZE_W_COMPRESSION)
+            compressed = chread(sock, Vector{UInt8}, compressed_len)
+
+            # check packet checksum
+            packet = [
+                UInt8(method);
+                reinterpret(UInt8, [raw_len]) |> Vector{UInt8};
+                reinterpret(UInt8, [data_len]) |> Vector{UInt8};
+                compressed
+            ]
+            if city_hash_128(packet) != hash
+                throw(ChecksumError())
+            end
+
+            data = decompress(method, compressed, data_len)
+            sock.io = IOBuffer(data)
         end
 
         block_info = chread(sock, BlockInfo)
