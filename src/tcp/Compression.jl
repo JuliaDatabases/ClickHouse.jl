@@ -21,7 +21,6 @@ function compress(mode::Compression, data::Vector{UInt8})::Vector{UInt8}
     return if mode == COMPRESSION_NONE || mode == COMPRESSION_DRY
         data
     elseif mode == COMPRESSION_LZ4
-        println("DECOMPRESSING :)")
         lz4_compress(data)
     end
 end
@@ -31,7 +30,6 @@ function decompress(mode::Compression, data::Vector{UInt8})::Vector{UInt8}
     return if mode == COMPRESSION_NONE || mode == COMPRESSION_DRY
         data
     elseif mode == COMPRESSION_LZ4
-        println("COMPRESSING :)")
         lz4_decompress(data)
     end
 end
