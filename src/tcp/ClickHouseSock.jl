@@ -7,8 +7,11 @@ Base.@kwdef struct CHSettings
     connection_timeout::Int = DBMS_DEFAULT_CONNECT_TIMEOUT
     max_insert_block_size::Int = DBMS_DEFAULT_MAX_INSERT_BLOCK
     send_buffer_size::Int = DBMS_DEFAULT_BUFFER_SIZE
+    compression::Compression = COMPRESSION_NONE
 end
 
+"""is compression enabled in these settings?"""
+compression_enabled(settings::CHSettings) = settings.compression != COMPRESSION_NONE
 
 mutable struct ClickHouseSock
     io ::Union{IO, Nothing}
@@ -29,6 +32,9 @@ mutable struct ClickHouseSock
         )
     end
 end
+
+"""is compression enabled on this socket?"""
+compression_enabled(sock::ClickHouseSock) = compression_enabled(sock.settings)
 
 """
     @guarded(sock::ClickHouseSock, expr)

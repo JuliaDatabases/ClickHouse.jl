@@ -34,7 +34,9 @@ end
 include("defines.jl")
 include("tcp.jl")
 include("columns_io.jl")
-
+include("cityhash.jl")
+using CategoricalArrays
+using Sockets: IPv4, IPv6
 
 function miss_or_equal(a, b)
     return (ismissing(a) && ismissing(b)) ||
@@ -55,7 +57,7 @@ end
 
 @testset "Decode & re-encode client packets (SELECT 1)" begin
     # This .bin file was extracted from a tcpdump captured from a session
-    # with the official ClickHouse command line client.
+    # with the official ClickHouse mand line client.
     data = read(open("select1/client-query.bin"), 100_000, all = true)
     sock = data |> IOBuffer |> ClickHouseSock
     sock.server_rev = ClickHouse.DBMS_VER_REV
@@ -351,8 +353,10 @@ end
     # Multi block insert.
     insert(sock, table, repeat([data], 100))
 
-    # SELECT -> Dict
+    SELECT -> Dict
     proj = ClickHouse.select(sock, "SELECT * FROM $(table) LIMIT 4")
+    @show proj
+
     @test proj[:lul] == UInt64[42, 1337, 123, 42]
     @test proj[:oof] == Float32[0., ℯ, π, 0.]
     @test proj[:foo] == String["aa", "bb", "cc", "aa"]

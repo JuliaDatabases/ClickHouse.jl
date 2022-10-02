@@ -4,3 +4,6 @@ struct ClickHouseServerException <: Exception
     name::String
     message::String
 end
+
+"""checksum (compressed block hash values) don't match"""
+struct ChecksumError <: Exception end

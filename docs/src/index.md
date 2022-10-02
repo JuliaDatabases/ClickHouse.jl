@@ -31,7 +31,6 @@ Usage examples can be found on the [usage page](@ref Usage).
 
 ## Limitations
 
-- Transfer compression is currently not implemented
 - Timezone conversion of `DateTime` / `DateTime64` for columns that have a
   timezone assigned in ClickHouse doesn't happen automatically. All DateTime
   objects are naive, meaning they aren't timezone aware. For reasoning, see

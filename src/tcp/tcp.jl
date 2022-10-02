@@ -1,4 +1,6 @@
 include("VarUInt.jl")
+include("CityHash128.jl")
+include("Compression.jl")
 include("ClickHouseSock.jl")
 include("BasicIO.jl")
 include("Macro.jl")

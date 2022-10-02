@@ -1,7 +1,7 @@
 """
 A (pure Julia) implementation of the version of CityHash used by ClickHouse.
-ClickHouse server comes built-in with an old version of this algorithm - so
-the implementation below is not a port of the currently ordained CityHash, but
+ClickHouse server comes built-in with an old version of this algorithm - so the
+implementation below is not a port of the currently ordained CityHash, but
 rather the one required for the transport-compression protocol(s) in ClickHouse.
 
 This is a fairly literal translation of the C source used in
@@ -318,6 +318,10 @@ end
     else
         return city_hash_128_with_seed(s, len, u128_from_pair(k0, k1))
     end
+end
+
+function city_hash_128(s::Vector{UInt8})::UInt128
+    return city_hash_128(s, UInt(length(s)))
 end
 
 function city_hash_128(s::AbstractString)::UInt128
