@@ -234,9 +234,8 @@ end
     @test reencoded_data == data
 end
 
-@testset "Queries on localhost DB" begin
+function test_queries(sock)
     table = "ClickHouseJL_Test"
-    sock = connect()
 
     try
         execute(sock, """
@@ -353,9 +352,9 @@ end
     # Multi block insert.
     insert(sock, table, repeat([data], 100))
 
-    SELECT -> Dict
+    # SELECT -> Dict
     proj = ClickHouse.select(sock, "SELECT * FROM $(table) LIMIT 4")
-    @show proj
+    # @show proj
 
     @test proj[:lul] == UInt64[42, 1337, 123, 42]
     @test proj[:oof] == Float32[0., ℯ, π, 0.]
@@ -472,4 +471,12 @@ end
 
     # Clean up.
     execute(sock, "DROP TABLE $(table)")
+end
+
+@testset "Queries on localhost DB" begin
+    test_queries(connect())
+end
+
+@testset "Queries on localhost DB + compression (lz4)" begin
+    test_queries(connect(compression="lz4"))
 end

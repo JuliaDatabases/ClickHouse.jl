@@ -155,7 +155,7 @@ function chwrite(sock::ClickHouseSock, x::Block)
             data = take!(sock.io)
             compressed = compress(sock.settings.compression, data)
             if length(data) > typemax(UInt32) ||
-                    length(comp_data) > typemax(UInt32)
+                    length(compressed) > typemax(UInt32)
                 throw(DomainError("Block too big"))
             end
 
