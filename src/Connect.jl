@@ -96,7 +96,7 @@ function connect(
     connection_timeout = DBMS_DEFAULT_CONNECT_TIMEOUT,
     max_insert_block_size = DBMS_DEFAULT_MAX_INSERT_BLOCK,
     send_buffer_size = DBMS_DEFAULT_BUFFER_SIZE,
-    compression::Union{Bool, AbstractString, UInt8} = false
+    compression::Union{Bool, AbstractString, UInt8, Compression} = false
 )::ClickHouseSock
     sock = ClickHouseSock(
         nothing,

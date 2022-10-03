@@ -10,8 +10,8 @@ Compression(flag::Bool)::Compression = flag ? COMPRESSION_LZ4 : COMPRESSION_NONE
 function Compression(name::String)::Compression
     if lowercase(name) == "lz4"
         return COMPRESSION_LZ4
-    elseif  lowercase(name) == "dry"
-        returnCOMPRESSION_CHECKSUM_ONLY
+    elseif lowercase(name) == "checksum_only"
+        return COMPRESSION_CHECKSUM_ONLY
     end
     error("unkown compression mode: $(name)")
 end
