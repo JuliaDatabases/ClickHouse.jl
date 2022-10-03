@@ -1,7 +1,7 @@
 
 @enum Compression::UInt8 begin
     COMPRESSION_NONE = 0
-    COMPRESSION_DRY = 0x02
+    COMPRESSION_CHECKSUM_ONLY = 0x02
     COMPRESSION_LZ4 = 0x82
 end
 
@@ -11,14 +11,14 @@ function Compression(name::String)::Compression
     if lowercase(name) == "lz4"
         return COMPRESSION_LZ4
     elseif  lowercase(name) == "dry"
-        return COMPRESSION_DRY
+        returnCOMPRESSION_CHECKSUM_ONLY
     end
     error("unkown compression mode: $(name)")
 end
 
 """compress data according to the compression mode"""
 function compress(mode::Compression, data::Vector{UInt8})::Vector{UInt8}
-    return if mode == COMPRESSION_NONE || mode == COMPRESSION_DRY
+    return if mode == COMPRESSION_NONE || mode ==COMPRESSION_CHECKSUM_ONLY
         data
     elseif mode == COMPRESSION_LZ4
         lz4_compress(data)
@@ -31,7 +31,7 @@ function decompress(
     data::Vector{UInt8},
     uncompressed_size::Integer = length(data) * 2
 )::Vector{UInt8}
-    return if mode == COMPRESSION_NONE || mode == COMPRESSION_DRY
+    return if mode == COMPRESSION_NONE || mode ==COMPRESSION_CHECKSUM_ONLY
         data
     elseif mode == COMPRESSION_LZ4
         lz4_decompress(data, uncompressed_size)
