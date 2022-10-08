@@ -41,9 +41,10 @@ end
 Hash 128 input bits down to 64 bits of output.
 This is intended to be a reasonably good hash function.
 """
+const kMul::UInt64 = 0x9ddfea08eb382d69
+
 @inline function hash_128_to_64(x::UInt128)
     ## Murmur-inspired hashing.
-    kMul::UInt64 = 0x9ddfea08eb382d69
     a = (low64(x) ⊻ high64(x)) * kMul
     a ⊻= (a >> 47)
     b = (high64(x) ⊻ a) * kMul
@@ -53,7 +54,10 @@ This is intended to be a reasonably good hash function.
 end
 
 hash_len_16(u::UInt64, v::UInt64)::UInt64 = hash_128_to_64(u128_from_pair(u, v))
-reinterpret_first(type, A) = reinterpret(type, A)[begin]
+
+@inline function reinterpret_first(type, A)
+    reinterpret(type, A)[begin]
+end
 
 @views function fetch64(s::AbstractArray{})::UInt64
     reinterpret_first(UInt64, s[begin:8])
@@ -312,7 +316,9 @@ end
         )
     elseif len >= 8
         city_hash_128_with_seed(
-            Vector{UInt8}([]), UInt(0), u128_from_pair(fetch64(s) ⊻ (len * k0), fetch64(s[len-7:len]) ⊻ k1)
+            Vector{UInt8}([]),
+            UInt(0),
+            u128_from_pair(fetch64(s) ⊻ (len * k0), fetch64(s[len-7:len]) ⊻ k1)
         )
     else
         city_hash_128_with_seed(s, len, u128_from_pair(k0, k1))
