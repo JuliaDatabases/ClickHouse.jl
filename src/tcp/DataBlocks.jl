@@ -1,4 +1,3 @@
-using CodecLz4
 
 const BLOCK_INFO_FIELD_STOP = UInt64(0)
 const BLOCK_INFO_FIELD_OVERFLOWS = UInt64(1)
@@ -109,20 +108,18 @@ function chread(sock::ClickHouseSock, ::Type{Block})::Block
             method = chread(sock, Compression)
             raw_len = chread(sock, UInt32)
             data_len = chread(sock, UInt32)
-            compressed_len = VarUInt(raw_len - HEADER_SIZE_W_COMPRESSION)
-            compressed = chread(sock, Vector{UInt8}, compressed_len)
 
-            # check packet checksum
-            packet = [
-                UInt8(method);
-                reinterpret(UInt8, [raw_len]) |> Vector{UInt8};
-                reinterpret(UInt8, [data_len]) |> Vector{UInt8};
-                compressed
-            ]
+            # form the packet with header and compressed data for the purpose
+            # computing the checksum
+            packet = Vector{UInt8}(undef, raw_len)
+            packet[1] = UInt8(method)
+            packet[2:5] = reinterpret(UInt8, [raw_len])
+            packet[6:9] = reinterpret(UInt8, [data_len])
+            compressed = @view packet[HEADER_SIZE_W_COMPRESSION+1:end]
+            read!(sock.io, compressed)
             if city_hash_128(packet) != hash
                 throw(ChecksumError())
             end
-
             data = decompress(method, compressed, data_len)
             sock.io = IOBuffer(data)
         end
