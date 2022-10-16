@@ -478,5 +478,5 @@ end
 end
 
 @testset "Queries on localhost DB + compression (lz4)" begin
-    test_queries(connect(compression="lz4"))
+    test_queries(connect(compression=COMPRESSION_LZ4))
 end
