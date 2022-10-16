@@ -18,7 +18,7 @@ end
 function lz4_decompress(
     input::AbstractArray{UInt8},
     expected_size::Integer=length(input) * 2
-)
+)::Vector{UInt8}
     # mark the input variable here because it's not used again later and the
     # call to pointer erases the GC's knowledge of the binding
     GC.@preserve input begin
