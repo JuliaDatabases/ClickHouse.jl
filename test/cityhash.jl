@@ -1,4 +1,3 @@
-using DelimitedFiles
 using Test
 using ClickHouse: city_hash_128, city_hash_64, low64, high64
 
@@ -34,7 +33,7 @@ end to the regginbrow was to be seen ringsome on the aquaface.
     stripped as is done below.
     """
 
-    answer_key = readdlm("ch/fw_ch128_key.txt", UInt64)[:, 1]
+    answer_key = parse.(UInt64, readlines("ch/fw_ch128_key.txt"))
     t = strip(replace(text, r"\s+" => " "))
 
     for i in 0:length(t)
