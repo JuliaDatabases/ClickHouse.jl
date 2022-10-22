@@ -95,7 +95,8 @@ function connect(
     password::AbstractString = "",
     connection_timeout = DBMS_DEFAULT_CONNECT_TIMEOUT,
     max_insert_block_size = DBMS_DEFAULT_MAX_INSERT_BLOCK,
-    send_buffer_size = DBMS_DEFAULT_BUFFER_SIZE
+    send_buffer_size = DBMS_DEFAULT_BUFFER_SIZE,
+    compression::Compression = COMPRESSION_NONE
 )::ClickHouseSock
     sock = ClickHouseSock(
         nothing,
@@ -107,7 +108,8 @@ function connect(
             password = password,
             connection_timeout = connection_timeout,
             max_insert_block_size = max_insert_block_size,
-            send_buffer_size = send_buffer_size
+            send_buffer_size = send_buffer_size,
+            compression = compression,
         )
     )
 

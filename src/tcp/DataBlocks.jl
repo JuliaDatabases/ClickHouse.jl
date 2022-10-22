@@ -1,6 +1,11 @@
+
 const BLOCK_INFO_FIELD_STOP = UInt64(0)
 const BLOCK_INFO_FIELD_OVERFLOWS = UInt64(1)
 const BLOCK_INFO_FIELD_BUCKET_NUM = UInt64(2)
+
+# UInt32 || UInt32 || UInt8 = (4 + 4 + 1)
+const HEADER_SIZE_W_COMPRESSION = UInt32(9)
+
 
 struct BlockInfo
     is_overflows::Bool
@@ -96,19 +101,89 @@ end
 
 function chread(sock::ClickHouseSock, ::Type{Block})::Block
     temp_table = chread(sock, String)
-    block_info = chread(sock, BlockInfo)
-    num_columns = chread(sock, VarUInt)
-    num_rows = chread(sock, VarUInt)
-    columns = [read_col(sock, num_rows) for _ ∈ 1:UInt64(num_columns)]
-    Block(temp_table, block_info, num_columns, num_rows, columns)
+    main_io = sock.io
+    try
+        if compression_enabled(sock.settings)
+            hash = chread(sock, UInt128)
+            method = chread(sock, Compression)
+            raw_len = chread(sock, UInt32)
+            data_len = chread(sock, UInt32)
+
+            # form the packet with header and compressed data for the purpose
+            # computing the checksum
+            packet = Vector{UInt8}(undef, raw_len)
+            packet[1] = UInt8(method)
+            packet[2:5] = reinterpret(UInt8, [raw_len])
+            packet[6:9] = reinterpret(UInt8, [data_len])
+            compressed = @view packet[HEADER_SIZE_W_COMPRESSION+1:end]
+            read!(sock.io, compressed)
+            if city_hash_128(packet) != hash
+                throw(ChecksumError())
+            end
+            data = decompress(method, compressed, data_len)
+            sock.io = IOBuffer(data)
+        end
+
+        block_info = chread(sock, BlockInfo)
+        num_columns = chread(sock, VarUInt)
+        num_rows = chread(sock, VarUInt)
+        columns = [read_col(sock, num_rows) for _ ∈ 1:UInt64(num_columns)]
+        return Block(temp_table, block_info, num_columns, num_rows, columns)
+    finally
+        sock.io = main_io
+    end
 end
 
 function chwrite(sock::ClickHouseSock, x::Block)
-    chwrite(sock, x.temp_table)
-    chwrite(sock, x.block_info)
-    chwrite(sock, x.num_columns)
-    chwrite(sock, x.num_rows)
-    for x ∈ x.columns
-        chwrite(sock, x)
+    main_io = sock.io
+    try
+        if compression_enabled(sock)
+            sock.io = IOBuffer(read = true, write = true)
+        else
+            # tmp table's aren't written in the compression block, so they are
+            # only written here if we aren't compressing what's about to be on
+            # sock.io
+            chwrite(sock, x.temp_table)
+        end
+
+        chwrite(sock, x.block_info)
+        chwrite(sock, x.num_columns)
+        chwrite(sock, x.num_rows)
+        for x ∈ x.columns
+            chwrite(sock, x)
+        end
+
+        if compression_enabled(sock)
+            # packet:
+            #   checksum(packet-inner)               :: UInt128  (1)
+            #   packet-inner:
+            #       compression method ∈ Compression :: UInt8    (2)
+            #       |C(D)| + |header|                :: UInt32   (3)
+            #       |D|                              :: UInt32   (4)
+            #       C(D)                             :: UInt8[]  (5)
+
+            data = take!(sock.io)
+            compressed = compress(sock.settings.compression, data)
+            if length(data) > typemax(UInt32) ||
+                    length(compressed) > typemax(UInt32)
+                throw(DomainError("Block too big"))
+            end
+
+            sock.io = IOBuffer(read = true, write = true)
+            chwrite(sock, sock.settings.compression)  # (2)
+            chwrite(sock, UInt32(length(compressed) + HEADER_SIZE_W_COMPRESSION))  # (3)
+            chwrite(sock, UInt32(length(data)))  # (4)
+            chwrite(sock, compressed)  # (5)
+
+            block_data = take!(sock.io)  # unroll (2:5) for (1)
+            hash = city_hash_128(block_data)  # checksum(packet-inner)
+            sock.io = main_io
+            chwrite(sock, x.temp_table)
+            chwrite(sock, hash)  # (1)
+            chwrite(sock, block_data) # (2:5)
+        end
+
+    finally
+        sock.io = main_io
     end
 end

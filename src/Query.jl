@@ -8,7 +8,8 @@ import Sockets
 # ============================================================================ #
 
 function write_query(sock::ClickHouseSock, query::AbstractString)::Nothing
-    query = ClientQuery("", ClientInfo(), "", 2, 0, query)
+    compression = compression_enabled(sock.settings)
+    query = ClientQuery("", ClientInfo(), "", 2, compression, query)
     write_packet(sock, query)
     write_packet(sock, make_block())
     nothing

@@ -8,6 +8,10 @@ include("columns/columns.jl")
 include("Connect.jl")
 include("Query.jl")
 
+export Compression
+export COMPRESSION_NONE
+export COMPRESSION_LZ4
+export COMPRESSION_CHECKSUM_ONLY
 export ClickHouseSock
 export Block
 export select
