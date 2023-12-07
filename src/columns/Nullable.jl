@@ -89,9 +89,12 @@ end
 
 #For Nothing columns,
 #(i.e. column of nulls in CHtypes of CH, of missing column in Julia types)
-function write_col_data(sock::ClickHouseSock,
-                                data::AbstractVector{Missing},
-                                ::Val{:Nullable}, nested::TypeAst) where {T}
+function write_col_data(
+    sock::ClickHouseSock,
+    data::AbstractVector{Missing},
+    ::Val{:Nullable},
+    nested::TypeAst
+)
     nested.name != :Nothing &&
         error("Vector{Missing} can be writen only to Nullable(Nothing) column")
     missing_map = Vector{UInt8}(undef, length(data))

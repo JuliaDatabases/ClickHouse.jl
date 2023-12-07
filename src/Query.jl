@@ -81,8 +81,8 @@ The iterable is expected to yield values of type `Dict{Symbol, Any}`.
 function insert(
     sock::ClickHouseSock,
     table::AbstractString,
-    iter,
-)::Nothing where T
+    iter
+)::Nothing
     # TODO: We might want to escape the table name here...
     @using_socket sock begin
         write_query(sock, "INSERT INTO $(table) VALUES")
