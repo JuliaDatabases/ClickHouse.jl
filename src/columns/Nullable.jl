@@ -16,6 +16,11 @@ convert_to_missings(data::Vector{T}) where {T} =
 convert_to_missings(data::CategoricalVector{T}) where {T} =
                             convert(CategoricalVector{Union{T, Missing}}, data)
 
+# Add a method to handle BitVector                            
+convert_to_missings(data::BitVector) = 
+                            convert(Vector{Union{Bool, Missing}}, data)
+
+
 function read_col_data(sock::ClickHouseSock, num_rows::VarUInt,
                                             ::Val{:Nullable}, nested::TypeAst)
 
