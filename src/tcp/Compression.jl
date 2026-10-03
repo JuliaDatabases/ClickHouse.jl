@@ -1,9 +1,11 @@
 using CodecLz4
+using CodecZstd
 
 @enum Compression::UInt8 begin
     COMPRESSION_NONE = 0
     COMPRESSION_CHECKSUM_ONLY = 0x02
     COMPRESSION_LZ4 = 0x82
+    COMPRESSION_ZSTD = 0x90
 end
 
 """compress data according to the compression mode"""
@@ -12,6 +14,8 @@ function compress(mode::Compression, data::Vector{UInt8})::Vector{UInt8}
         data
     elseif mode == COMPRESSION_LZ4
         lz4_compress(data)
+    elseif mode == COMPRESSION_ZSTD
+        transcode(ZstdCompressor, data)
     end
 end
 
@@ -43,5 +47,7 @@ function decompress(
         data
     elseif mode == COMPRESSION_LZ4
         GC.@preserve data lz4_decompress(data, uncompressed_size)
+    elseif mode == COMPRESSION_ZSTD
+        transcode(ZstdDecompressor, convert(Vector{UInt8}, data))
     end
 end

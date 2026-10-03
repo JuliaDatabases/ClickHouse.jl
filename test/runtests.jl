@@ -480,3 +480,27 @@ end
 @testset "Queries on localhost DB + compression (lz4)" begin
     test_queries(connect(compression=COMPRESSION_LZ4))
 end
+
+@testset "Queries on localhost DB + checksum only" begin
+    test_queries(connect(compression=COMPRESSION_CHECKSUM_ONLY))
+end
+
+@testset "Queries on localhost DB + compression (zstd)" begin
+    test_queries(connect(compression=ClickHouse.COMPRESSION_ZSTD))
+end
+
+@testset "Read-only queries" begin
+    for mode in (COMPRESSION_NONE, COMPRESSION_CHECKSUM_ONLY, COMPRESSION_LZ4,
+                 ClickHouse.COMPRESSION_ZSTD)
+        @testset "$mode" begin
+            sock = connect(compression=mode)
+            try
+                execute(sock, "SET readonly = 1")
+                @test only(ClickHouse.select(sock, "SELECT getSetting('readonly') AS readonly")[:readonly]) == 1
+                @test ClickHouse.select(sock, "SELECT toUInt64(1) AS number") == Dict(:number => UInt64[1])
+            finally
+                close(sock)
+            end
+        end
+    end
+end

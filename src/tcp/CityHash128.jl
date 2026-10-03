@@ -9,10 +9,10 @@ This is a fairly literal translation of the C source used in
 """
 
 # Some primes between 2^63 and 2^64 for various uses.
-const k0::UInt64 = 0xc3a5c85c97cb3127
-const k1::UInt64 = 0xb492b66fbe98f273
-const k2::UInt64 = 0x9ae16a3b2f90404f
-const k3::UInt64 = 0xc949d7c7509e6557
+const k0 = 0xc3a5c85c97cb3127
+const k1 = 0xb492b66fbe98f273
+const k2 = 0x9ae16a3b2f90404f
+const k3 = 0xc949d7c7509e6557
 
 u8(val) = val % UInt8
 u32(val) = val % UInt32
@@ -41,7 +41,7 @@ end
 Hash 128 input bits down to 64 bits of output.
 This is intended to be a reasonably good hash function.
 """
-const kMul::UInt64 = 0x9ddfea08eb382d69
+const kMul = 0x9ddfea08eb382d69
 
 @inline function hash_128_to_64(x::UInt128)
     ## Murmur-inspired hashing.
