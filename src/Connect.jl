@@ -82,10 +82,14 @@ end
         password = "",
         connection_timeout = DBMS_DEFAULT_CONNECT_TIMEOUT,
         max_insert_block_size = DBMS_DEFAULT_MAX_INSERT_BLOCK,
-        send_buffer_size = DBMS_DEFAULT_BUFFER_SIZE
-    )
+        send_buffer_size = DBMS_DEFAULT_BUFFER_SIZE,
+        compression = COMPRESSION_NONE
+)
 
-Return `ClickHouseSock` connected to ClickHouse server with the specified parameters
+Return `ClickHouseSock` connected to ClickHouse server with the specified parameters.
+`compression` selects the format of outgoing data blocks and enables compressed
+replies when it is not `COMPRESSION_NONE`. The server chooses the reply format;
+the client reads it from each block's header.
 """
 function connect(
     host::AbstractString = "localhost",

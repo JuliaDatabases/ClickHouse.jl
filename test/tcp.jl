@@ -2,6 +2,21 @@ using ClickHouse: ClickHouseSock, CHSettings, is_connected,
                 is_busy, chwrite, chread, has_temporary_tables, ClientInfo,
                 VarUInt, write_packet, read_packet, @using_socket, ClientHello
 
+@testset "compression codecs" begin
+    # A Zstandard frame with one raw block containing "hello world".
+    frame = b"\x28\xb5\x2f\xfd\x20\x0b\x59\x00\x00hello world"
+    @test ClickHouse.decompress(ClickHouse.COMPRESSION_ZSTD, frame, 11) == b"hello world"
+    @test ClickHouse.decompress(ClickHouse.COMPRESSION_ZSTD, @view(frame[:]), 11) == b"hello world"
+    packet = vcat(UInt8[0], frame)
+    @test ClickHouse.decompress(ClickHouse.COMPRESSION_ZSTD, @view(packet[2:end]), 11) == b"hello world"
+
+    data = repeat(b"ClickHouse compression", 10_000)
+    for mode in (COMPRESSION_NONE, COMPRESSION_CHECKSUM_ONLY, COMPRESSION_LZ4,
+                 ClickHouse.COMPRESSION_ZSTD)
+        @test ClickHouse.decompress(mode, ClickHouse.compress(mode, data), length(data)) == data
+    end
+end
+
 
 @testset "guarded" begin
     sock = ClickHouseSock(PipeBuffer())
