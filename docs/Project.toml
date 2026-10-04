@@ -1,2 +1,6 @@
 [deps]
+ClickHouse = "82f2e89e-b495-11e9-1d9d-fb40d7cf2130"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+
+[compat]
+Documenter = "1.19"

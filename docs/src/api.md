@@ -11,6 +11,7 @@ ClickHouseSock
 
 ```@docs
 connect
+connect!
 execute
 insert
 ping

@@ -87,6 +87,7 @@ end
 )
 
 Return `ClickHouseSock` connected to ClickHouse server with the specified parameters.
+The endpoint must use unencrypted native TCP; HTTPS and TLS are not supported.
 `compression` selects the format of outgoing data blocks and enables compressed
 replies when it is not `COMPRESSION_NONE`. The server chooses the reply format;
 the client reads it from each block's header.
