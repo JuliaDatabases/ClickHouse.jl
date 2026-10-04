@@ -13,6 +13,11 @@ end
 """is compression enabled in these settings?"""
 compression_enabled(settings::CHSettings) = settings.compression != COMPRESSION_NONE
 
+"""
+A connection to a ClickHouse server using the native TCP protocol.
+Create a connection with [`connect`](@ref), release it with `close`, and
+reconnect a closed socket with [`connect!`](@ref).
+"""
 mutable struct ClickHouseSock
     io ::Union{IO, Nothing}
     settings ::CHSettings

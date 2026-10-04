@@ -31,11 +31,21 @@ Usage examples can be found on the [usage page](@ref Usage).
 
 ## Limitations
 
+- Connections use the unencrypted native TCP protocol, normally on port 9000.
+  HTTPS and encrypted native TCP endpoints require a different client.
 - Timezone conversion of `DateTime` / `DateTime64` for columns that have a
   timezone assigned in ClickHouse doesn't happen automatically. All DateTime
   objects are naive, meaning they aren't timezone aware. For reasoning, see
   [this post](https://github.com/JuliaDatabases/ClickHouse.jl/pull/21) and
   [this post](https://github.com/JuliaDatabases/ClickHouse.jl/issues/7#issuecomment-683311706).
+
+## Compression
+
+The `compression` keyword of [`connect`](@ref) selects the outgoing block format:
+`ClickHouse.COMPRESSION_NONE`, `ClickHouse.COMPRESSION_LZ4`,
+`ClickHouse.COMPRESSION_CHECKSUM_ONLY`, or `ClickHouse.COMPRESSION_ZSTD`.
+The client reads compressed replies using the format recorded in each block;
+the server chooses that reply format.
 
 ## Index
 
