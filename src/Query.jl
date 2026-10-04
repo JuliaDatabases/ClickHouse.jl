@@ -16,7 +16,7 @@ function write_query(sock::ClickHouseSock, query::AbstractString)::Nothing
 end
 
 function dict2columns(
-    dict::Dict{Symbol, T} where T,
+    dict,
     valid_columns::Dict{Symbol, String},
 )::Vector{Column}
     @assert begin
@@ -28,7 +28,7 @@ function dict2columns(
 
     [
         Column(string(name), valid_columns[name], column)
-        for (name, column) ∈ dict
+        for (name, column) ∈ pairs(dict)
     ]
 end
 
@@ -76,7 +76,8 @@ end
 
 """
 Insert blocks into a table, reading from an iterable.
-The iterable is expected to yield values of type `Dict{Symbol, Any}`.
+Each block maps `Symbol` column names to arrays through `keys` and `pairs`,
+for example a `Dict` or `NamedTuple`. All columns must have the same length.
 """
 function insert(
     sock::ClickHouseSock,
