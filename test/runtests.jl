@@ -6,6 +6,29 @@ using Dates
 using UUIDs
 using DecFP
 
+@testset "Named column blocks" begin
+    valid_columns = Dict(:n => "UInt64", :s => "String")
+    data = (n = UInt64[1, 2], s = view(["one", "two", "three"], 1:2))
+    for block in (Dict(pairs(data)), IdDict(pairs(data)), data, pairs(data))
+        columns = ClickHouse.dict2columns(block, valid_columns)
+        @test Set(column.name for column in columns) == Set(["n", "s"])
+        for column in columns
+            name = Symbol(column.name)
+            @test column.type == valid_columns[name]
+            @test column.data === data[name]
+        end
+        @test UInt64(ClickHouse.make_block(columns).num_rows) == 2
+    end
+    @test_throws AssertionError ClickHouse.dict2columns((n = data.n,), valid_columns)
+    @test_throws AssertionError ClickHouse.dict2columns(
+        (n = data.n, s = data.s, extra = data.n), valid_columns)
+    @test_throws AssertionError ClickHouse.make_block(ClickHouse.dict2columns(
+        (n = data.n, s = ["one"]), valid_columns))
+    columns = ClickHouse.dict2columns(NamedTuple(), Dict{Symbol, String}())
+    @test columns == ClickHouse.Column[]
+    @test UInt64(ClickHouse.make_block(columns).num_rows) == 0
+end
+
 function recursive_miss_cmp(a::AbstractVector,b::AbstractVector)
     length(a) != length(b) && return false
     for i in 1:length(a)
@@ -345,8 +368,8 @@ function test_queries(sock)
     )
 
     # Single block inserts.
-    for _ ∈ 1:3
-        insert(sock, table, [data])
+    for block ∈ (data, (; data...), pairs((; data...)))
+        insert(sock, table, [block])
     end
 
     # Multi block insert.
