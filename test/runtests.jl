@@ -56,6 +56,7 @@ end
 
 include("defines.jl")
 include("tcp.jl")
+include("insert_progress.jl")
 include("columns_io.jl")
 include("cityhash.jl")
 using CategoricalArrays
