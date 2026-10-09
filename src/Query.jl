@@ -78,6 +78,8 @@ end
 Insert blocks into a table, reading from an iterable.
 Each block maps `Symbol` column names to arrays through `keys` and `pairs`,
 for example a `Dict` or `NamedTuple`. All columns must have the same length.
+Returns once the server confirms completion; progress updates do not interrupt
+the insert.
 """
 function insert(
     sock::ClickHouseSock,
@@ -109,7 +111,11 @@ function insert(
         # Empty block = end of data.
         write_packet(sock, make_block())
 
-        read_server_packet(sock)::ServerEndOfStream
+        packet = read_server_packet(sock)
+        while packet isa ServerProgress
+            packet = read_server_packet(sock)
+        end
+        packet::ServerEndOfStream
     end
     nothing
 end
