@@ -1,0 +1,2 @@
+/proc/1/cmdline /sbin/docker-init -- docker-entrypoint.sh bash /work/run.sh 
+/proc/7/cmdline bash /work/run.sh 
